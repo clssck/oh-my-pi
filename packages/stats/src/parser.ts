@@ -152,3 +152,43 @@ export async function getSessionEntry(sessionPath: string, entryId: string): Pro
 	}
 	return null;
 }
+
+/**
+ * Find a specific entry and its parent context chain.
+ * Walks the parentId chain to build the conversation history.
+ */
+export async function getSessionEntryWithContext(sessionPath: string, entryId: string): Promise<SessionEntry[]> {
+	const file = Bun.file(sessionPath);
+	if (!(await file.exists())) return [];
+
+	const text = await file.text();
+	const entries = Bun.JSONL.parse(text) as SessionEntry[];
+
+	// Build a map of id -> entry for quick lookup
+	const entryMap = new Map<string, SessionEntry>();
+	for (const entry of entries) {
+		if ("id" in entry && entry.id) {
+			entryMap.set(entry.id, entry);
+		}
+	}
+
+	// Find the target entry and walk back through parentId chain
+	const contextChain: SessionEntry[] = [];
+	let currentId: string | null = entryId;
+
+	while (currentId) {
+		const entry = entryMap.get(currentId);
+		if (!entry) break;
+
+		contextChain.unshift(entry); // Add to front to maintain chronological order
+
+		// Get parentId if this is a message entry
+		if ("parentId" in entry && entry.parentId) {
+			currentId = entry.parentId;
+		} else {
+			break;
+		}
+	}
+
+	return contextChain;
+}
