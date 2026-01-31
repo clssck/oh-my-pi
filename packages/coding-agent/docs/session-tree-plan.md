@@ -165,7 +165,7 @@ appendEntry(customType: string, data?: unknown): void;
 
 Calls `sessionManager.appendCustomEntry()` directly.
 
-**New: `registerCommand()` (types ✅, wiring TODO)**
+**New: `registerCommand()` ✅**
 
 ```typescript
 // HookAPI (the `pi` object) - utilities available to all hooks:
