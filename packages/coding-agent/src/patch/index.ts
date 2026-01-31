@@ -404,7 +404,9 @@ export class EditTool implements AgentTool<TInput> {
 			throw new Error(`File not found: ${path}`);
 		}
 
-		const rawContent = await file.text();
+		// Use Node's fs.readFile instead of Bun's file.text() to preserve UTF-8 BOM
+		// Bun's file.text() automatically strips the BOM, but we need to preserve it
+		const rawContent = (await fs.readFile(absolutePath)).toString("utf-8");
 		const { bom, text: content } = stripBom(rawContent);
 		const originalEnding = detectLineEnding(content);
 		const normalizedContent = normalizeToLF(content);

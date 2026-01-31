@@ -5,6 +5,7 @@ import { logger, once, untilAborted } from "@oh-my-pi/pi-utils";
 import type { BunFile } from "bun";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import { type Theme, theme } from "../modes/theme/theme";
+import { detectLineEnding, restoreLineEndings, stripBom } from "../patch/normalize";
 import lspDescription from "../prompts/tools/lsp.md" with { type: "text" };
 import type { ToolSession } from "../tools";
 import { resolveToCwd } from "../tools/path-utils";
@@ -834,6 +835,11 @@ async function runLspWritethrough(
 	}
 	const { lspServers, customLinterServers } = splitServers(servers);
 
+	// Preserve BOM and line endings before any formatting
+	// LSP formatters often strip BOMs and normalize line endings
+	const { bom: originalBom, text: contentWithoutBom } = stripBom(content);
+	const originalLineEnding = detectLineEnding(contentWithoutBom);
+
 	let finalContent = content;
 	const writeContent = async (value: string) => (file ? file.write(value) : Bun.write(dst, value));
 	const getWritePromise = once(() => writeContent(finalContent));
@@ -841,6 +847,19 @@ async function runLspWritethrough(
 
 	// Capture diagnostic versions BEFORE syncing to detect stale diagnostics
 	const minVersions = enableDiagnostics ? await captureDiagnosticVersions(cwd, servers) : undefined;
+
+	/**
+	 * Restore original BOM and line endings after formatting.
+	 * Formatters may strip BOM and normalize to LF, so we need to reapply them.
+	 */
+	const restoreBomAndLineEndings = (formattedContent: string): string => {
+		const { bom: formattedBom, text: formattedText } = stripBom(formattedContent);
+		// If original had BOM but formatted doesn't, restore it
+		const bomToUse = originalBom || formattedBom;
+		// Restore original line endings
+		const restoredText = restoreLineEndings(formattedText, originalLineEnding);
+		return bomToUse + restoredText;
+	};
 
 	let formatter: FileFormatResult | undefined;
 	let diagnostics: FileDiagnosticsResult | undefined;
@@ -851,7 +870,9 @@ async function runLspWritethrough(
 			if (useCustomFormatter) {
 				// Custom linters (e.g. Biome CLI) require on-disk input.
 				await writeContent(content);
-				finalContent = await formatContent(dst, content, cwd, customLinterServers, operationSignal);
+				let formattedContent = await formatContent(dst, content, cwd, customLinterServers, operationSignal);
+				formattedContent = restoreBomAndLineEndings(formattedContent);
+				finalContent = formattedContent;
 				formatter = finalContent !== content ? FileFormatResult.FORMATTED : FileFormatResult.UNCHANGED;
 				await writeContent(finalContent);
 				await syncFileContent(dst, finalContent, cwd, lspServers, operationSignal);
@@ -861,7 +882,9 @@ async function runLspWritethrough(
 
 				// 2. Format in-memory via LSP
 				if (enableFormat) {
-					finalContent = await formatContent(dst, content, cwd, lspServers, operationSignal);
+					let formattedContent = await formatContent(dst, content, cwd, lspServers, operationSignal);
+					formattedContent = restoreBomAndLineEndings(formattedContent);
+					finalContent = formattedContent;
 					formatter = finalContent !== content ? FileFormatResult.FORMATTED : FileFormatResult.UNCHANGED;
 				}
 
