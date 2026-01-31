@@ -566,7 +566,8 @@ bar`,
 
 			// Both lines should have the quote border
 			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
-			const quotedLines = plainLines.filter(line => line.startsWith("│ "));
+			const quoteBorder = defaultMarkdownTheme.symbols.quoteBorder;
+			const quotedLines = plainLines.filter(line => line.startsWith(`${quoteBorder} `));
 			expect(quotedLines.length).toBe(2);
 
 			// Both lines should have italic (from theme.quote styling)
@@ -600,7 +601,8 @@ bar`,
 
 			// Both lines should have the quote border
 			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
-			const quotedLines = plainLines.filter(line => line.startsWith("│ "));
+			const quoteBorder = defaultMarkdownTheme.symbols.quoteBorder;
+			const quotedLines = plainLines.filter(line => line.startsWith(`${quoteBorder} `));
 			expect(quotedLines.length).toBe(2);
 
 			// Both lines should have italic (from theme.quote styling)
@@ -629,8 +631,9 @@ bar`,
 			expect(contentLines.length > 1).toBeTruthy();
 
 			// Every content line should start with the quote border
+			const quoteBorder = defaultMarkdownTheme.symbols.quoteBorder;
 			for (const line of contentLines) {
-				expect(line.startsWith("│ ")).toBeTruthy();
+				expect(line.startsWith(`${quoteBorder} `)).toBeTruthy();
 			}
 
 			// All content should be preserved
@@ -659,8 +662,9 @@ bar`,
 			const contentLines = plainLines.filter(line => line.length > 0);
 
 			// All lines should have the quote border
+			const quoteBorder = defaultMarkdownTheme.symbols.quoteBorder;
 			for (const line of contentLines) {
-				expect(line.startsWith("│ ")).toBeTruthy();
+				expect(line.startsWith(`${quoteBorder} `)).toBeTruthy();
 			}
 
 			// Check that italic is applied (from theme.quote)
@@ -678,7 +682,8 @@ bar`,
 			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
 
 			// Should have the quote border
-			expect(plainLines.some(line => line.startsWith("│ "))).toBeTruthy();
+			const quoteBorder = defaultMarkdownTheme.symbols.quoteBorder;
+			expect(plainLines.some(line => line.startsWith(`${quoteBorder} `))).toBeTruthy();
 
 			// Content should be preserved
 			const allPlain = plainLines.join(" ");

@@ -828,34 +828,42 @@ export class Editor implements Component, Focusable {
 		// Ctrl+K - Delete to end of line
 		if (matchesKey(data, "ctrl+k")) {
 			this.deleteToEndOfLine();
+			return;
 		}
 		// Ctrl+U - Delete to start of line
 		else if (matchesKey(data, "ctrl+u")) {
 			this.deleteToStartOfLine();
+			return;
 		}
 		// Ctrl+W - Delete word backwards
 		else if (matchesKey(data, "ctrl+w")) {
 			this.deleteWordBackwards();
+			return;
 		}
 		// Option/Alt+Backspace - Delete word backwards
 		else if (matchesKey(data, "alt+backspace")) {
 			this.deleteWordBackwards();
+			return;
 		}
 		// Option/Alt+D - Delete word forwards
 		else if (matchesKey(data, "alt+d") || matchesKey(data, "alt+delete")) {
 			this.deleteWordForwards();
+			return;
 		}
 		// Ctrl+Y - Yank from kill ring
 		else if (matchesKey(data, "ctrl+y")) {
 			this.yankFromKillRing();
+			return;
 		}
 		// Ctrl+A - Move to start of line
 		else if (matchesKey(data, "ctrl+a")) {
 			this.moveToLineStart();
+			return;
 		}
 		// Ctrl+E - Move to end of line
 		else if (matchesKey(data, "ctrl+e")) {
 			this.moveToLineEnd();
+			return;
 		}
 		// Alt+Enter - special handler if callback exists, otherwise new line
 		else if (matchesKey(data, "alt+enter")) {
@@ -864,6 +872,7 @@ export class Editor implements Component, Focusable {
 			} else {
 				this.addNewLine();
 			}
+			return;
 		}
 		// New line shortcuts (but not plain LF/CR which should be submit)
 		else if (
@@ -878,6 +887,7 @@ export class Editor implements Component, Focusable {
 		) {
 			// Modifier + Enter = new line
 			this.addNewLine();
+			return;
 		}
 		// Plain Enter - submit (handles both legacy \r and Kitty protocol with lock bits)
 		else if (matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") {
@@ -930,26 +940,32 @@ export class Editor implements Component, Focusable {
 		// Backspace (including Shift+Backspace)
 		else if (matchesKey(data, "backspace") || matchesKey(data, "shift+backspace")) {
 			this.handleBackspace();
+			return;
 		}
 		// Line navigation shortcuts (Home/End keys)
 		else if (matchesKey(data, "home")) {
 			this.moveToLineStart();
+			return;
 		} else if (matchesKey(data, "end")) {
 			this.moveToLineEnd();
+			return;
 		}
 		// Forward delete (Fn+Backspace or Delete key, including Shift+Delete)
 		else if (matchesKey(data, "delete") || matchesKey(data, "shift+delete")) {
 			this.handleForwardDelete();
+			return;
 		}
 		// Word navigation (Option/Alt + Arrow or Ctrl + Arrow)
 		else if (matchesKey(data, "alt+left") || matchesKey(data, "ctrl+left")) {
 			// Word left
 			this.resetKillSequence();
 			this.moveWordBackwards();
+			return;
 		} else if (matchesKey(data, "alt+right") || matchesKey(data, "ctrl+right")) {
 			// Word right
 			this.resetKillSequence();
 			this.moveWordForwards();
+			return;
 		}
 		// Arrow keys
 		else if (matchesKey(data, "up")) {
@@ -964,6 +980,7 @@ export class Editor implements Component, Focusable {
 			} else {
 				this.moveCursor(-1, 0); // Cursor movement (within text or history entry)
 			}
+			return;
 		} else if (matchesKey(data, "down")) {
 			// Down - history navigation or cursor movement
 			if (this.historyIndex > -1 && this.isOnLastVisualLine()) {
@@ -974,12 +991,15 @@ export class Editor implements Component, Focusable {
 			} else {
 				this.moveCursor(1, 0); // Cursor movement (within text or history entry)
 			}
+			return;
 		} else if (matchesKey(data, "right")) {
 			// Right
 			this.moveCursor(0, 1);
+			return;
 		} else if (matchesKey(data, "left")) {
 			// Left
 			this.moveCursor(0, -1);
+			return;
 		}
 
 		// Character jump mode triggers
