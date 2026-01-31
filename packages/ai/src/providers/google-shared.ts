@@ -263,6 +263,7 @@ const UNSUPPORTED_SCHEMA_FIELDS = new Set([
 	"unevaluatedProperties",
 	"unevaluatedItems",
 	"patternProperties",
+	"propertyNames",
 	"additionalProperties",
 	"minItems",
 	"maxItems",
