@@ -1029,6 +1029,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 									: undefined;
 							await session.compact(instructions, options);
 						},
+						getSystemPrompt: () => session.systemPrompt,
 					},
 				);
 				extensionRunner.onError(err => {

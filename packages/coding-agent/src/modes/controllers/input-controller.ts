@@ -40,17 +40,20 @@ export class InputController {
 				this.ctx.isPythonMode = false;
 				this.ctx.updateEditorBorderColor();
 			} else if (!this.ctx.editor.getText().trim()) {
-				// Double-escape with empty editor triggers /tree or /branch based on setting
-				const now = Date.now();
-				if (now - this.ctx.lastEscapeTime < 500) {
-					if (this.ctx.settingsManager.getDoubleEscapeAction() === "tree") {
-						this.ctx.showTreeSelector();
+				// Double-escape with empty editor triggers /tree, /branch, or nothing based on setting
+				const action = this.ctx.settingsManager.getDoubleEscapeAction();
+				if (action !== "none") {
+					const now = Date.now();
+					if (now - this.ctx.lastEscapeTime < 500) {
+						if (action === "tree") {
+							this.ctx.showTreeSelector();
+						} else {
+							this.ctx.showUserMessageSelector();
+						}
+						this.ctx.lastEscapeTime = 0;
 					} else {
-						this.ctx.showUserMessageSelector();
+						this.ctx.lastEscapeTime = now;
 					}
-					this.ctx.lastEscapeTime = 0;
-				} else {
-					this.ctx.lastEscapeTime = now;
 				}
 			}
 		};

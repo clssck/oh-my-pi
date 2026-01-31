@@ -130,6 +130,7 @@ export class ExtensionUiController {
 					instructionsOrOptions && typeof instructionsOrOptions === "object" ? instructionsOrOptions : undefined;
 				await this.ctx.session.compact(instructions, options);
 			},
+			getSystemPrompt: () => this.ctx.session.systemPrompt,
 		};
 		const commandActions: ExtensionCommandContextActions = {
 			getContextUsage: () => this.ctx.session.getContextUsage(),
@@ -212,6 +213,7 @@ export class ExtensionUiController {
 				}
 				await this.ctx.executeCompaction(instructionsOrOptions, false);
 			},
+			getSystemPrompt: () => this.ctx.session.systemPrompt,
 		};
 
 		extensionRunner.initialize(actions, contextActions, commandActions, uiContext);
@@ -299,6 +301,7 @@ export class ExtensionUiController {
 					instructionsOrOptions && typeof instructionsOrOptions === "object" ? instructionsOrOptions : undefined;
 				await this.ctx.session.compact(instructions, options);
 			},
+			getSystemPrompt: () => this.ctx.session.systemPrompt,
 		};
 		const commandActions: ExtensionCommandContextActions = {
 			getContextUsage: () => this.ctx.session.getContextUsage(),
@@ -390,6 +393,7 @@ export class ExtensionUiController {
 				}
 				await this.ctx.executeCompaction(instructionsOrOptions, false);
 			},
+			getSystemPrompt: () => this.ctx.session.systemPrompt,
 		};
 
 		extensionRunner.initialize(actions, contextActions, commandActions, uiContext);
@@ -461,6 +465,7 @@ export class ExtensionUiController {
 						shutdown: () => {
 							// Signal shutdown request
 						},
+						getSystemPrompt: () => this.ctx.session.systemPrompt,
 					});
 				} catch (err) {
 					this.showToolError(registeredTool.definition.name, err instanceof Error ? err.message : String(err));

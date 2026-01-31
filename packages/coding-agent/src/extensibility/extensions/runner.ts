@@ -119,6 +119,7 @@ export class ExtensionRunner {
 	private hasPendingMessagesFn: () => boolean = () => false;
 	private getContextUsageFn: () => ContextUsage | undefined = () => undefined;
 	private compactFn: (instructionsOrOptions?: string | CompactOptions) => Promise<void> = async () => {};
+	private getSystemPromptFn: () => string = () => "";
 	private newSessionHandler: NewSessionHandler = async () => ({ cancelled: false });
 	private branchHandler: BranchHandler = async () => ({ cancelled: false });
 	private navigateTreeHandler: NavigateTreeHandler = async () => ({ cancelled: false });
@@ -171,6 +172,7 @@ export class ExtensionRunner {
 			this.navigateTreeHandler = commandContextActions.navigateTree;
 			this.getContextUsageFn = commandContextActions.getContextUsage;
 			this.compactFn = commandContextActions.compact;
+			this.getSystemPromptFn = commandContextActions.getSystemPrompt;
 		}
 
 		this.uiContext = uiContext ?? noOpUIContext;
@@ -315,6 +317,7 @@ export class ExtensionRunner {
 			ui: this.uiContext,
 			getContextUsage: () => this.getContextUsageFn(),
 			compact: instructionsOrOptions => this.compactFn(instructionsOrOptions),
+			getSystemPrompt: () => this.getSystemPromptFn(),
 			hasUI: this.hasUI(),
 			cwd: this.cwd,
 			sessionManager: this.sessionManager,

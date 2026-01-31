@@ -4,6 +4,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
+import ignore from "ignore";
 import { readDirEntries, readFile } from "../capability/fs";
 import type { Skill, SkillFrontmatter } from "../capability/skill";
 import type { LoadContext, LoadResult, SourceMeta } from "../capability/types";
@@ -11,6 +12,56 @@ import { parseFrontmatter } from "../utils/frontmatter";
 
 const VALID_THINKING_LEVELS: readonly string[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
+const IGNORE_FILE_NAMES = [".gitignore", ".ignore", ".fdignore"];
+
+type IgnoreMatcher = ReturnType<typeof ignore>;
+
+function toPosixPath(p: string): string {
+	return p.split(path.sep).join("/");
+}
+
+function prefixIgnorePattern(line: string, prefix: string): string | null {
+	const trimmed = line.trim();
+	if (!trimmed) return null;
+	if (trimmed.startsWith("#") && !trimmed.startsWith("\\#")) return null;
+
+	let pattern = line;
+	let negated = false;
+
+	if (pattern.startsWith("!")) {
+		negated = true;
+		pattern = pattern.slice(1);
+	} else if (pattern.startsWith("\\!")) {
+		pattern = pattern.slice(1);
+	}
+
+	if (pattern.startsWith("/")) {
+		pattern = pattern.slice(1);
+	}
+
+	const prefixed = prefix ? `${prefix}${pattern}` : pattern;
+	return negated ? `!${prefixed}` : prefixed;
+}
+
+async function addIgnoreRules(ig: IgnoreMatcher, dir: string, rootDir: string): Promise<void> {
+	const relativeDir = path.relative(rootDir, dir);
+	const prefix = relativeDir ? `${toPosixPath(relativeDir)}/` : "";
+
+	for (const filename of IGNORE_FILE_NAMES) {
+		const ignorePath = path.join(dir, filename);
+		try {
+			const content = await readFile(ignorePath);
+			if (!content) continue;
+			const patterns = content
+				.split(/\r?\n/)
+				.map(line => prefixIgnorePattern(line, prefix))
+				.filter((line): line is string => Boolean(line));
+			if (patterns.length > 0) {
+				ig.add(patterns);
+			}
+		} catch {}
+	}
+}
 
 /**
  * Normalize unicode spaces to regular spaces.
@@ -236,10 +287,21 @@ export async function loadSkillsFromDir(
 	const warnings: string[] = [];
 	const { dir, level, providerId, requireDescription = false } = options;
 
+	// Create ignore matcher and load rules from the directory
+	const ig = ignore();
+	await addIgnoreRules(ig, dir, dir);
+
 	const entries = await readDirEntries(dir);
-	const skillDirs = entries.filter(
-		entry => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules",
-	);
+	const skillDirs = entries.filter(entry => {
+		if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "node_modules") {
+			return false;
+		}
+
+		// Check if this directory is ignored
+		const relPath = toPosixPath(entry.name);
+		const ignorePath = `${relPath}/`;
+		return !ig.ignores(ignorePath);
+	});
 
 	const results = await Promise.all(
 		skillDirs.map(async entry => {
@@ -324,11 +386,30 @@ export async function loadFilesFromDir<T>(
 		transform: (name: string, content: string, path: string, source: SourceMeta) => T | null;
 		/** Whether to recurse into subdirectories */
 		recursive?: boolean;
+		/** Internal: ignore matcher for parent directory */
+		_ignoreMatcher?: IgnoreMatcher;
+		/** Internal: root directory for ignore paths */
+		_rootDir?: string;
 	},
 ): Promise<LoadResult<T>> {
+	const rootDir = options._rootDir ?? dir;
+	const ig = options._ignoreMatcher ?? ignore();
+
+	// Load ignore rules from this directory if it's the root
+	if (!options._ignoreMatcher) {
+		await addIgnoreRules(ig, dir, rootDir);
+	}
+
 	const entries = await readDirEntries(dir);
 
-	const visibleEntries = entries.filter(entry => !entry.name.startsWith("."));
+	const visibleEntries = entries.filter(entry => {
+		if (entry.name.startsWith(".")) return false;
+
+		// Check if this entry is ignored
+		const relPath = toPosixPath(path.relative(rootDir, path.join(dir, entry.name)));
+		const ignorePath = entry.isDirectory() ? `${relPath}/` : relPath;
+		return !ig.ignores(ignorePath);
+	});
 
 	const directories = options.recursive ? visibleEntries.filter(entry => entry.isDirectory()) : [];
 
@@ -341,7 +422,13 @@ export async function loadFilesFromDir<T>(
 
 	const [subResults, fileResults] = await Promise.all([
 		Promise.all(
-			directories.map(entry => loadFilesFromDir(_ctx, path.join(dir, entry.name), provider, level, options)),
+			directories.map(entry =>
+				loadFilesFromDir(_ctx, path.join(dir, entry.name), provider, level, {
+					...options,
+					_ignoreMatcher: ig,
+					_rootDir: rootDir,
+				}),
+			),
 		),
 		Promise.all(
 			files.map(async entry => {
@@ -440,10 +527,19 @@ export async function discoverExtensionModulePaths(ctx: LoadContext, dir: string
 	const discovered: string[] = [];
 	const entries = await readDirEntries(dir);
 
+	// Create ignore matcher and load rules
+	const ig = ignore();
+	await addIgnoreRules(ig, dir, dir);
+
 	for (const entry of entries) {
 		if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
 
 		const entryPath = path.join(dir, entry.name);
+		const relPath = toPosixPath(entry.name);
+		const ignorePath = entry.isDirectory() ? `${relPath}/` : relPath;
+
+		// Check if this entry is ignored
+		if (ig.ignores(ignorePath)) continue;
 
 		// 1. Direct files: *.ts or *.js
 		if (entry.isFile() && isExtensionModuleFile(entry.name)) {

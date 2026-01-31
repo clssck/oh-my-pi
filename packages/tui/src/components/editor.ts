@@ -1,4 +1,5 @@
 import type { AutocompleteProvider, CombinedAutocompleteProvider } from "../autocomplete";
+import { getEditorKeybindings } from "../keybindings";
 import { matchesKey } from "../keys";
 import type { SymbolTheme } from "../symbols";
 import { type Component, CURSOR_MARKER, type Focusable } from "../tui";
@@ -282,6 +283,9 @@ export class Editor implements Component, Focusable {
 	// Emacs-style kill ring
 	private killRing: string[] = [];
 	private lastKillWasKillCommand: boolean = false;
+
+	// Character jump mode
+	private jumpMode: "forward" | "backward" | null = null;
 
 	// Border color (can be changed dynamically)
 	public borderColor: (str: string) => string;
@@ -673,6 +677,27 @@ export class Editor implements Component, Focusable {
 			}
 		}
 
+		// Handle character jump mode (awaiting next character to jump to)
+		if (this.jumpMode !== null) {
+			const kb = getEditorKeybindings();
+			// Cancel if the hotkey is pressed again
+			if (kb.matches(data, "jumpForward") || kb.matches(data, "jumpBackward")) {
+				this.jumpMode = null;
+				return;
+			}
+
+			if (data.charCodeAt(0) >= 32) {
+				// Printable character - perform the jump
+				const direction = this.jumpMode;
+				this.jumpMode = null;
+				this.jumpToChar(data, direction);
+				return;
+			}
+
+			// Control character - cancel and fall through to normal handling
+			this.jumpMode = null;
+		}
+
 		// Handle special key combinations first
 
 		// Ctrl+C - Exit (let parent handle this)
@@ -956,8 +981,20 @@ export class Editor implements Component, Focusable {
 			// Left
 			this.moveCursor(0, -1);
 		}
+
+		// Character jump mode triggers
+		const kb = getEditorKeybindings();
+		if (kb.matches(data, "jumpForward")) {
+			this.jumpMode = "forward";
+			return;
+		}
+		if (kb.matches(data, "jumpBackward")) {
+			this.jumpMode = "backward";
+			return;
+		}
+
 		// Shift+Space - insert regular space (Kitty protocol sends escape sequence)
-		else if (matchesKey(data, "shift+space")) {
+		if (matchesKey(data, "shift+space")) {
 			this.insertCharacter(" ");
 		}
 		// Kitty CSI-u printable characters (shifted symbols like @, ?, {, })
@@ -1772,6 +1809,40 @@ export class Editor implements Component, Focusable {
 		}
 
 		this.state.cursorCol = newCol;
+	}
+
+	/**
+	 * Jump to the first occurrence of a character in the specified direction.
+	 * Multi-line search. Case-sensitive. Skips the current cursor position.
+	 */
+	private jumpToChar(char: string, direction: "forward" | "backward"): void {
+		this.resetKillSequence();
+		const isForward = direction === "forward";
+		const lines = this.state.lines;
+
+		const end = isForward ? lines.length : -1;
+		const step = isForward ? 1 : -1;
+
+		for (let lineIdx = this.state.cursorLine; lineIdx !== end; lineIdx += step) {
+			const line = lines[lineIdx] || "";
+			const isCurrentLine = lineIdx === this.state.cursorLine;
+
+			// Current line: start after/before cursor; other lines: search full line
+			const searchFrom = isCurrentLine
+				? isForward
+					? this.state.cursorCol + 1
+					: this.state.cursorCol - 1
+				: undefined;
+
+			const idx = isForward ? line.indexOf(char, searchFrom) : line.lastIndexOf(char, searchFrom);
+
+			if (idx !== -1) {
+				this.state.cursorLine = lineIdx;
+				this.state.cursorCol = idx;
+				return;
+			}
+		}
+		// No match found - cursor stays in place
 	}
 
 	private moveWordForwards(): void {

@@ -344,6 +344,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 							: undefined;
 					await session.compact(instructions, options);
 				},
+				getSystemPrompt: () => session.systemPrompt,
 			},
 			// ExtensionCommandContextActions - commands invokable via prompt("/command")
 			{
@@ -373,6 +374,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 							: undefined;
 					await session.compact(instructions, options);
 				},
+				getSystemPrompt: () => session.systemPrompt,
 			},
 			new RpcExtensionUIContext(pendingExtensionRequests, output),
 		);
@@ -448,6 +450,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 					interruptMode: session.interruptMode,
 					sessionFile: session.sessionFile,
 					sessionId: session.sessionId,
+					sessionName: session.sessionName,
 					autoCompactionEnabled: session.autoCompactionEnabled,
 					messageCount: session.messages.length,
 					queuedMessageCount: session.queuedMessageCount,
@@ -592,6 +595,15 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 			case "get_last_assistant_text": {
 				const text = session.getLastAssistantText();
 				return success(id, "get_last_assistant_text", { text });
+			}
+
+			case "set_session_name": {
+				const name = command.name.trim();
+				if (!name) {
+					return error(id, "set_session_name", "Session name cannot be empty");
+				}
+				session.setSessionName(name);
+				return success(id, "set_session_name");
 			}
 
 			// =================================================================
