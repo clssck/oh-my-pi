@@ -225,7 +225,7 @@ export interface Settings {
 	shellForceBasic?: boolean; // Force bash/sh even if user's default shell is different
 	collapseChangelog?: boolean; // Show condensed changelog after update (use /changelog for full)
 	startup?: StartupSettings;
-	doubleEscapeAction?: "branch" | "tree"; // Action for double-escape with empty editor (default: "tree")
+	doubleEscapeAction?: "branch" | "tree" | "none"; // Action for double-escape with empty editor (default: "tree")
 	thinkingBudgets?: ThinkingBudgetsSettings; // Custom token budgets for thinking levels
 	/** Environment variables to set automatically on startup */
 	env?: Record<string, string>;
@@ -1860,11 +1860,11 @@ export class SettingsManager {
 		await this.save();
 	}
 
-	getDoubleEscapeAction(): "branch" | "tree" {
+	getDoubleEscapeAction(): "branch" | "tree" | "none" {
 		return this.settings.doubleEscapeAction ?? "tree";
 	}
 
-	async setDoubleEscapeAction(action: "branch" | "tree"): Promise<void> {
+	async setDoubleEscapeAction(action: "branch" | "tree" | "none"): Promise<void> {
 		this.globalSettings.doubleEscapeAction = action;
 		this.markModified("doubleEscapeAction");
 		await this.save();

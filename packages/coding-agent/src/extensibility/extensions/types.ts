@@ -153,6 +153,8 @@ export interface ExtensionContext {
 	getContextUsage(): ContextUsage | undefined;
 	/** Compact the session context (interactive mode shows UI). */
 	compact(instructionsOrOptions?: string | CompactOptions): Promise<void>;
+	/** Get the current effective system prompt. */
+	getSystemPrompt(): string;
 	/** Whether UI is available (false in print/RPC mode) */
 	hasUI: boolean;
 	/** Current working directory */
@@ -893,6 +895,7 @@ export interface ExtensionContextActions {
 	shutdown: () => void;
 	getContextUsage: () => ContextUsage | undefined;
 	compact: (instructionsOrOptions?: string | CompactOptions) => Promise<void>;
+	getSystemPrompt: () => string;
 }
 
 /** Actions for ExtensionCommandContext (ctx.* in command handlers). */
@@ -906,6 +909,7 @@ export interface ExtensionCommandContextActions {
 	branch: (entryId: string) => Promise<{ cancelled: boolean }>;
 	navigateTree: (targetId: string, options?: { summarize?: boolean }) => Promise<{ cancelled: boolean }>;
 	compact: (instructionsOrOptions?: string | CompactOptions) => Promise<void>;
+	getSystemPrompt: () => string;
 }
 
 /** Full runtime = state + actions. */

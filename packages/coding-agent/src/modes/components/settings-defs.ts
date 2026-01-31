@@ -246,9 +246,9 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "enum",
 		label: "Double-escape action",
 		description: "Action when pressing Escape twice with empty editor",
-		values: ["tree", "branch"],
+		values: ["tree", "branch", "none"],
 		get: sm => sm.getDoubleEscapeAction(),
-		set: (sm, v) => sm.setDoubleEscapeAction(v as "branch" | "tree"),
+		set: (sm, v) => sm.setDoubleEscapeAction(v as "branch" | "tree" | "none"),
 	},
 
 	// ═══════════════════════════════════════════════════════════════════════════

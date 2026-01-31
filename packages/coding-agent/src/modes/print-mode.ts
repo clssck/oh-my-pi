@@ -88,6 +88,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 							: undefined;
 					await session.compact(instructions, options);
 				},
+				getSystemPrompt: () => session.systemPrompt,
 			},
 			// ExtensionCommandContextActions - commands invokable via prompt("/command")
 			{
@@ -116,6 +117,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 							: undefined;
 					await session.compact(instructions, options);
 				},
+				getSystemPrompt: () => session.systemPrompt,
 			},
 			// No UI context
 		);
