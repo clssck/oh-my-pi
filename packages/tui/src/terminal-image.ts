@@ -14,7 +14,13 @@ export class TerminalInfo {
 	) {}
 
 	isImageLine(line: string): boolean {
-		return !!this.imageProtocol && line.startsWith(this.imageProtocol);
+		if (!this.imageProtocol) return false;
+		// Fast path: sequence at line start (single-row images)
+		if (line.startsWith(this.imageProtocol)) {
+			return true;
+		}
+		// Slow path: sequence elsewhere (multi-row images have cursor-up prefix)
+		return line.includes(this.imageProtocol);
 	}
 }
 
