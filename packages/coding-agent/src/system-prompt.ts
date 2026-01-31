@@ -11,7 +11,7 @@ import chalk from "chalk";
 import { contextFileCapability } from "./capability/context-file";
 import { systemPromptCapability } from "./capability/system-prompt";
 import { renderPromptTemplate } from "./config/prompt-templates";
-import type { SkillsSettings } from "./config/settings-manager";
+import { SettingsManager, type SkillsSettings } from "./config/settings-manager";
 import { type ContextFile, loadCapability, type SystemPrompt as SystemPromptFile } from "./discovery";
 import { loadSkills, type Skill } from "./extensibility/skills";
 import customSystemPromptTemplate from "./prompts/system/custom-system-prompt.md" with { type: "text" };
@@ -573,11 +573,6 @@ async function getGpuModel(): Promise<string | null> {
 	}
 }
 
-function getShellName(): string {
-	const shell = firstNonEmpty([process.env.SHELL, process.env.ComSpec]);
-	return shell ?? "unknown";
-}
-
 function getTerminalName(): string {
 	const termProgram = process.env.TERM_PROGRAM;
 	const termProgramVersion = process.env.TERM_PROGRAM_VERSION;
@@ -765,6 +760,9 @@ async function getEnvironmentInfo(): Promise<Array<{ label: string; value: strin
 		await saveSystemInfoCache(sysInfo);
 	}
 
+	// Get the actual shell used for command execution (not $SHELL)
+	const shellConfig = await SettingsManager.getGlobalShellConfig();
+
 	return [
 		{ label: "OS", value: sysInfo.os },
 		{ label: "Distro", value: sysInfo.distro },
@@ -773,7 +771,7 @@ async function getEnvironmentInfo(): Promise<Array<{ label: string; value: strin
 		{ label: "CPU", value: sysInfo.cpu },
 		{ label: "GPU", value: sysInfo.gpu },
 		{ label: "Disk", value: sysInfo.disk },
-		{ label: "Shell", value: getShellName() },
+		{ label: "Shell", value: shellConfig.shell },
 		{ label: "Terminal", value: getTerminalName() },
 		{ label: "DE", value: getDesktopEnvironment() },
 		{ label: "WM", value: getWindowManager() },
@@ -881,6 +879,8 @@ export interface BuildSystemPromptOptions {
 	preloadedSkills?: Skill[];
 	/** Pre-loaded rulebook rules (rules with descriptions, excluding TTSR and always-apply). */
 	rules?: Array<{ name: string; description?: string; path: string; globs?: string[] }>;
+	/** Whether this is the main coordinator agent (not a subagent). Enables parallel delegation emphasis. */
+	isCoordinator?: boolean;
 }
 
 /** Build the system prompt with tools, guidelines, and context */
@@ -900,6 +900,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		skills: providedSkills,
 		preloadedSkills: providedPreloadedSkills,
 		rules,
+		isCoordinator,
 	} = options;
 	const resolvedCwd = cwd ?? process.cwd();
 	const resolvedCustomPrompt = await resolvePromptInput(customPrompt, "system prompt");
@@ -969,6 +970,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 			rules: rules ?? [],
 			dateTime,
 			cwd: resolvedCwd,
+			isCoordinator: isCoordinator ?? false,
 		});
 	}
 
@@ -986,5 +988,6 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		dateTime,
 		cwd: resolvedCwd,
 		appendSystemPrompt: resolvedAppendPrompt ?? "",
+		isCoordinator: isCoordinator ?? false,
 	});
 }

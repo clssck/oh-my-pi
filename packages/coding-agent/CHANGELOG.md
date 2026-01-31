@@ -2,6 +2,120 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Updated task tool documentation to clarify that subagents can access parent conversation context via a searchable file, reducing need to repeat information in context parameter
+- Updated plan mode prompt to guide model toward using `edit` tool for incremental plan updates instead of defaulting to `write`
+
+## [9.3.1] - 2026-01-31
+### Added
+
+- Added `getCompactContext()` API to retrieve parent conversation context for subagents, excluding system prompts and tool results
+- Added automatic `submit_result` tool injection for subagents with explicit tool lists
+- Added `contextFile` parameter to pass parent conversation context to subagent sessions
+
+### Changed
+
+- Updated subagent system prompt to reference parent conversation context file when available
+- Enhanced subagent system prompt formatting with clearer backtick notation for tool and parameter names
+
+### Removed
+
+- Removed schema override notification from task summary prompt
+
+## [9.2.5] - 2026-01-31
+### Changed
+
+- Clarified that user instructions about delegation override tool-use defaults
+- Updated coordinator guidance to emphasize Task tool preference for substantial work with improved emphasis on context window limitations
+- Enhanced `context` parameter documentation to require self-contained information for subagents, including file contents and user requirements
+
+## [9.2.4] - 2026-01-31
+### Fixed
+
+- Prevented interactive commands from blocking on stdin by redirecting from /dev/null in POSIX and Fish shell sessions
+
+## [9.2.3] - 2026-01-31
+### Added
+
+- Persistent shell session support for bash tool with environment variable preservation across commands
+- New `shellForceBasic` setting to force bash/sh even if user's default shell is different (default: true)
+- New `OMP_SHELL_PERSIST` environment variable to control persistent shell behavior (set to 0 to disable)
+
+### Changed
+
+- Bash tool now reuses a persistent shell session by default on Unix systems for improved performance and state preservation
+- Replaced Bun file APIs with Node.js `fs` module for better cross-runtime compatibility
+- LSP configuration loading is now synchronous instead of async
+- Shell snapshot generation now sanitizes `BASH_ENV` and `ENV` variables to prevent shell exit issues
+- Shell snapshot caching now per-shell-binary instead of global to avoid cross-shell contamination
+- System prompt restructured with coordinator-specific guidance for parallel task delegation
+- Bash tool now reuses a persistent shell session by default on Unix. Set `OMP_SHELL_PERSIST=0` to disable or fall back to per-command execution on Windows/unsupported shells.
+- Added a shellForceBasic setting to force bash/sh and keep environment changes across bash commands (default: true).
+
+### Fixed
+
+- Shell snapshots now filter unsafe bash options (onecmd, monitor, restricted) to prevent session exits
+- Git branch detection in status line now works synchronously without race conditions
+- Shell session initialization properly restores trap handlers and shell functions after command execution
+- Sanitized `BASH_ENV`/`ENV` during persistent shell startup and snapshot creation to prevent basic shells from exiting immediately.
+- Cached shell snapshots per shell binary to avoid sourcing zsh snapshots in bash sessions.
+- Filtered unsafe bash options (onecmd/monitor/restricted) out of shell snapshots to prevent session exits.
+
+## [9.2.2] - 2026-01-31
+
+### Added
+- Added grep CLI subcommand (`omp grep`) for testing pattern matching
+- Added fuzzy matching for model resolution with scoring and ranking fallback
+- Added 'Open: artifact folder' menu option to debug selector for quick access to session artifacts
+- Added Kimi API format setting for selecting between OpenAI and Anthropic formats
+- Added Codex and Gemini web search providers with OAuth and grounding support
+- Added /debug command with interactive menu for profiling, heap snapshots, session dumps, and diagnostics
+- Added configurable ask timeout and notification settings
+- Added gitignore-aware project tree scanning with ripgrep integration
+- Added project tree visualization to system prompts with configurable depth and entry limits
+- Added reset() method to CountdownTimer with integration into HookSelectorComponent
+- Added custom message support to AgentSession via promptCustomMessage() method
+- Added skill message component for rendering /skill command messages as compact entries
+- Added model preference matching system for intelligent model selection based on usage history
+- Added designer agent with UI/UX review and accessibility audit capabilities
+- Added model-specific edit variant configuration for patch/replace modes
+- Added automatic browser opening when stats dashboard starts
+- Added model statistics table and TTFT/throughput metrics to stats dashboard
+- Added artifact allocation for truncated fetch responses to preserve full content
+- Added 30-second timeout to ask tool with auto-selection of recommended option
+- Added recommended parameter (0-indexed) to ask tool for specifying default option
+- Added JTD to TypeScript converter for rendering schemas in system prompts
+- Added tools list to system prompt for better agent awareness
+- Added synthetic message flag for system-injected prompts
+- Added session compaction enhancements with auto-continue, tool pruning, and remote endpoint support
+- Added detection and rendering of missing complete tool warning in subagent output
+- Added outline UI components for bordered list containers
+- Added macOS NFD normalization and curly quote variant resolution for file paths
+- Enhanced session compaction with dynamic token ratio adjustment and improved summary preservation
+
+### Changed
+- Simplified find tool API by consolidating path and pattern parameters
+- Replaced bulk file loading with streaming for read tool to reduce memory overhead
+- Migrated grep and find tools to WASM-based implementation
+- Replaced ripgrep-based file listing with glob-based file discovery for project scans
+- Updated minimum Bun runtime requirement to >=1.3.7
+- Renamed task parameter from output to schema
+- Renamed complete tool to submit_result for clarity and consistency
+- Improved output preview logic: shows full output for ≤30 lines, truncates to 10 lines for larger output
+
+### Fixed
+- Enhanced error reporting with debug stack trace when DEBUG env is set
+- Improved OAuth token refresh error handling to distinguish transient vs definitive failures
+- Added windowsHide option to child process spawn calls to prevent console windows on Windows
+- External edits to config.yml are now preserved when omp reloads or saves settings
+- Exposed LSP server startup errors in session display and logs
+- Improved error handling and security in agent storage initialization with restrictive file permissions
+- Fixed LSP server display showing unknown when server warmup fails
+- Preserved null timeout when user disables ask timeout setting
+- Removed incorrect timeout unit conversion logic in cursor, fetch, gemini-image, and ssh tools
+- Blocked /fork command while streaming to prevent split session logs
+
 ## [9.0.0] - 2026-01-29
 
 ### Fixed

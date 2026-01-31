@@ -448,6 +448,7 @@ export async function loadSettings(cwd?: string, agentDir?: string): Promise<Set
 		retry: manager.getRetrySettings(),
 		hideThinkingBlock: manager.getHideThinkingBlock(),
 		shellPath: manager.getShellPath(),
+		shellForceBasic: manager.getShellForceBasic(),
 		collapseChangelog: manager.getCollapseChangelog(),
 		extensions: manager.getExtensionPaths(),
 		skills: manager.getSkillsSettings(),
@@ -759,6 +760,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			return undefined;
 		},
 		getPlanModeState: () => session.getPlanModeState(),
+		getCompactContext: () => session.formatCompactContext(),
 		settings: settingsManager,
 		settingsManager,
 		authStorage,
@@ -1005,6 +1007,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			toolNames,
 			rules: rulebookRules,
 			skillsSettings: settingsManager.getSkillsSettings(),
+			isCoordinator: options.hasUI,
 		});
 
 		if (options.systemPrompt === undefined) {
@@ -1021,6 +1024,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				rules: rulebookRules,
 				skillsSettings: settingsManager.getSkillsSettings(),
 				customPrompt: options.systemPrompt,
+				isCoordinator: options.hasUI,
 			});
 		}
 		return options.systemPrompt(defaultPrompt);
@@ -1115,6 +1119,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		followUpMode: settingsManager.getFollowUpMode(),
 		interruptMode: settingsManager.getInterruptMode(),
 		thinkingBudgets: settingsManager.getThinkingBudgets(),
+		kimiApiFormat: settingsManager.getKimiApiFormat(),
 		getToolContext: tc => toolContextStore.getContext(tc),
 		getApiKey: async () => {
 			const currentModel = agent.state.model;

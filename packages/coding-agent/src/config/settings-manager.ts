@@ -1,4 +1,4 @@
-import * as fs from "node:fs/promises";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { isEnoent, logger, procmgr } from "@oh-my-pi/pi-utils";
 import { YAML } from "bun";
@@ -90,10 +90,12 @@ export interface ExaSettings {
 
 export type WebSearchProviderOption = "auto" | "exa" | "perplexity" | "anthropic";
 export type ImageProviderOption = "auto" | "gemini" | "openrouter";
+export type KimiApiFormatOption = "openai" | "anthropic";
 
 export interface ProviderSettings {
 	webSearch?: WebSearchProviderOption; // default: "auto" (exa > perplexity > anthropic)
 	image?: ImageProviderOption; // default: "auto" (openrouter > gemini)
+	kimiApiFormat?: KimiApiFormatOption; // default: "anthropic" (use Anthropic-compatible API for Kimi, more stable)
 }
 
 export interface BashInterceptorRule {
@@ -220,6 +222,7 @@ export interface Settings {
 	retry?: RetrySettings;
 	hideThinkingBlock?: boolean;
 	shellPath?: string; // Custom shell path (e.g., for Cygwin users on Windows)
+	shellForceBasic?: boolean; // Force bash/sh even if user's default shell is different
 	collapseChangelog?: boolean; // Show condensed changelog after update (use /changelog for full)
 	startup?: StartupSettings;
 	doubleEscapeAction?: "branch" | "tree"; // Action for double-escape with empty editor (default: "tree")
@@ -633,7 +636,7 @@ export class SettingsManager {
 				migrated = true;
 				// Backup settings.json
 				try {
-					await fs.rename(settingsJsonPath, `${settingsJsonPath}.bak`);
+					fs.renameSync(settingsJsonPath, `${settingsJsonPath}.bak`);
 				} catch (error) {
 					logger.warn("SettingsManager failed to backup settings.json", { error: String(error) });
 				}
@@ -1059,9 +1062,19 @@ export class SettingsManager {
 		return this.settings.shellPath;
 	}
 
+	getShellForceBasic(): boolean {
+		return this.settings.shellForceBasic ?? true;
+	}
+
 	async setShellPath(path: string | undefined): Promise<void> {
 		this.globalSettings.shellPath = path;
 		this.markModified("shellPath");
+		await this.save();
+	}
+
+	async setShellForceBasic(force: boolean): Promise<void> {
+		this.globalSettings.shellForceBasic = force;
+		this.markModified("shellForceBasic");
 		await this.save();
 	}
 
@@ -1346,6 +1359,19 @@ export class SettingsManager {
 		}
 		this.globalSettings.providers.image = provider;
 		this.markModified("providers", "image");
+		await this.save();
+	}
+
+	getKimiApiFormat(): KimiApiFormatOption {
+		return this.settings.providers?.kimiApiFormat ?? "anthropic";
+	}
+
+	async setKimiApiFormat(format: KimiApiFormatOption): Promise<void> {
+		if (!this.globalSettings.providers) {
+			this.globalSettings.providers = {};
+		}
+		this.globalSettings.providers.kimiApiFormat = format;
+		this.markModified("providers", "kimiApiFormat");
 		await this.save();
 	}
 
@@ -1948,7 +1974,13 @@ export class SettingsManager {
 	 * Gets the shell configuration
 	 * @returns The shell configuration
 	 */
-	async getShellConfig() {
+	getShellConfig() {
+		if (this.getShellForceBasic()) {
+			const basicShell = resolveBasicShell();
+			if (basicShell) {
+				return procmgr.getShellConfig(basicShell);
+			}
+		}
 		const shell = this.getShellPath();
 		return procmgr.getShellConfig(shell);
 	}
@@ -1961,4 +1993,23 @@ export class SettingsManager {
 		const settings = await SettingsManager.acquire();
 		return settings.getShellConfig();
 	}
+}
+
+function resolveBasicShell(): string | undefined {
+	const searchPaths = ["/bin", "/usr/bin", "/usr/local/bin", "/opt/homebrew/bin"];
+	const candidates = ["bash", "sh"];
+
+	for (const name of candidates) {
+		for (const dir of searchPaths) {
+			const fullPath = path.join(dir, name);
+			if (fs.existsSync(fullPath)) return fullPath;
+		}
+	}
+
+	for (const name of ["bash", "bash.exe", "sh", "sh.exe"]) {
+		const resolved = Bun.which(name);
+		if (resolved) return resolved;
+	}
+
+	return undefined;
 }

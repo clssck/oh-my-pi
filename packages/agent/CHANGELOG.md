@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [9.2.2] - 2026-01-31
+
+### Added
+- Added toolChoice option to AgentPromptOptions for controlling tool selection
+
 ## [8.2.0] - 2026-01-24
 
 ### Changed
