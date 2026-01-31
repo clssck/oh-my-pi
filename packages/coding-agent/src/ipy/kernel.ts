@@ -843,6 +843,14 @@ export class PythonKernel {
 		return this.#alive && !this.#disposed && this.#ws?.readyState === WebSocket.OPEN;
 	}
 
+	/**
+	 * @internal Test-only method to simulate gateway process exit.
+	 * Sets the alive flag to false, mimicking what happens when gatewayProcess.exited resolves.
+	 */
+	_simulateGatewayExit(): void {
+		this.#alive = false;
+	}
+
 	async execute(code: string, options?: KernelExecuteOptions): Promise<KernelExecuteResult> {
 		if (!this.isAlive()) {
 			throw new Error("Python kernel is not running");

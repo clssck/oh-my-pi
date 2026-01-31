@@ -438,4 +438,69 @@ describe("PythonKernel (external gateway)", () => {
 	});
 });
 
-// TODO: add coverage for gateway process exit handling once PythonKernel exposes a test hook.
+describe("PythonKernel gateway exit handling", () => {
+	const originalEnv = { ...process.env };
+	const originalFetch = globalThis.fetch;
+	const originalWebSocket = globalThis.WebSocket;
+
+	beforeEach(() => {
+		process.env.OMP_PYTHON_GATEWAY_URL = "http://gateway.test";
+		process.env.OMP_PYTHON_SKIP_CHECK = "1";
+		globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+	});
+
+	afterEach(() => {
+		for (const key of Object.keys(process.env)) {
+			if (!(key in originalEnv)) {
+				delete process.env[key];
+			}
+		}
+		for (const [key, value] of Object.entries(originalEnv)) {
+			process.env[key] = value;
+		}
+		globalThis.fetch = originalFetch;
+		globalThis.WebSocket = originalWebSocket;
+		FakeWebSocket.lastInstance = null;
+		vi.restoreAllMocks();
+	});
+
+	it("should mark kernel as not alive after gateway exit", async () => {
+		const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+			if (url.endsWith("/api/kernels") && init?.method === "POST") {
+				return new Response(JSON.stringify({ id: "kernel-1" }), { status: 201 });
+			}
+			if (url.includes("/api/kernels/") && init?.method === "DELETE") {
+				return new Response("", { status: 204 });
+			}
+			return new Response("", { status: 200 });
+		});
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+		let initCount = 0;
+		const kernelPromise = PythonKernel.start({ cwd: "/" });
+		await Bun.sleep(10);
+
+		const ws = FakeWebSocket.lastInstance;
+		if (!ws) throw new Error("WebSocket not initialized");
+
+		// Handle kernel initialization messages (init + prelude)
+		ws.setSendHandler(data => {
+			const msg = typeof data === "string" ? (JSON.parse(data) as JupyterMessage) : decodeMessage(data);
+			initCount++;
+			sendOkExecution(ws, msg.header.msg_id, initCount);
+		});
+
+		const kernel = await kernelPromise;
+		expect(kernel.isAlive()).toBe(true);
+
+		// Simulate gateway process exit
+		kernel._simulateGatewayExit();
+
+		expect(kernel.isAlive()).toBe(false);
+
+		// Verify execute throws when kernel is not alive
+		await expect(kernel.execute("print('test')")).rejects.toThrow("Python kernel is not running");
+
+		await kernel.shutdown();
+	});
+});
