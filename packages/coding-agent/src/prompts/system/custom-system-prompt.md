@@ -59,10 +59,10 @@ You **MUST** read `rule://<name>` when working in that domain.
 {{/list}}
 </rules>
 {{/if}}
-Current date: {{date}}
-Current working directory: {{cwd}}
 {{#if secretsEnabled}}
 <redacted-content>
 Some values in tool output are redacted for security. They appear as `#XXXX#` tokens (4 uppercase-alphanumeric characters wrapped in `#`). These are **not errors** — they are intentional placeholders for sensitive values (API keys, passwords, tokens). Treat them as opaque strings. Do not attempt to decode, fix, or report them as problems.
 </redacted-content>
 {{/if}}
+Current date: {{date}}
+Current working directory: {{cwd}}
