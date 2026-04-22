@@ -461,6 +461,38 @@ async function buildCodexRequestContext(
 	};
 }
 
+/**
+ * Derive a stable prompt_cache_key for OpenAI Codex Responses.
+ *
+ * Before this helper the key was `options?.sessionId`, a fresh UUIDv7 per OMP
+ * session. That meant every new session started cold against Codex's cache
+ * router. Hashing `(model, systemPrompt)` produces the same value for every
+ * session that shares the same cached prefix, so repeat runs share a cache
+ * route and hit the KV cache on turn 1. Within-session stickiness is
+ * preserved because the system prompt does not change across turns.
+ *
+ * This value is used as the body field `prompt_cache_key` AND as the
+ * `conversation_id` / `session_id` HTTP headers (the Codex cache router keys
+ * off the headers). The websocket private/public session keys
+ * (getCodexWebSocketSessionKey / getCodexPublicSessionKey) continue to use
+ * `options.sessionId` because those handle connection multiplexing, not
+ * cache routing.
+ *
+ * Preserves the pre-existing opt-out: callers that leave `options.sessionId`
+ * undefined still get no cache routing (existing test contract).
+ */
+function derivePromptCacheKey(
+	model: Model<"openai-codex-responses">,
+	context: Context,
+	options: Pick<OpenAICodexResponsesOptions, "sessionId"> | undefined,
+): string | undefined {
+	const explicit = options?.sessionId;
+	if (!explicit) return undefined;
+	const systemPrompt = context.systemPrompt;
+	if (!systemPrompt) return explicit;
+	return `omp-${Bun.hash(`${model.id}\u0000${systemPrompt}`).toString(36)}`;
+}
+
 async function buildTransformedCodexRequestBody(
 	model: Model<"openai-codex-responses">,
 	context: Context,
@@ -470,7 +502,7 @@ async function buildTransformedCodexRequestBody(
 		model: model.id,
 		input: [...convertMessages(model, context)],
 		stream: true,
-		prompt_cache_key: options?.sessionId,
+		prompt_cache_key: derivePromptCacheKey(model, context, options),
 	};
 
 	if (options?.maxTokens) {
@@ -582,7 +614,12 @@ async function openCodexWebSocketTransport(
 		requestContext.requestHeaders,
 		requestContext.accountId,
 		requestContext.apiKey,
-		options?.sessionId,
+		// Use the body's content-derived prompt_cache_key for the conversation_id /
+		// session_id HTTP headers (Codex cache router keys off those headers).
+		// The websocket private/public session keys (getCodexWebSocketSessionKey /
+		// getCodexPublicSessionKey) keep options.sessionId for connection
+		// multiplexing — those are orthogonal to cache routing.
+		requestContext.transformedBody.prompt_cache_key ?? options?.sessionId,
 		"websocket",
 		websocketState,
 	);
@@ -625,7 +662,14 @@ async function openCodexSseTransport(
 			requestContext.requestHeaders,
 			requestContext.accountId,
 			requestContext.apiKey,
-			options?.sessionId,
+			// Use the body's (content-derived) prompt_cache_key for the conversation_id /
+			// session_id HTTP headers too. Codex routes its cache by those headers, so
+			// keeping all three values coupled to one content-derived key lets fresh
+			// OMP sessions with the same system prompt share a cache route.
+			// Mirror of the websocket transport's coupling: Codex cache routes
+			// by conversation_id / session_id HTTP headers, and the body field
+			// prompt_cache_key is already the content-derived value.
+			body.prompt_cache_key ?? options?.sessionId,
 			body,
 			state,
 			requestSetup.requestSignal,
