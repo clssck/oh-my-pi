@@ -8,10 +8,10 @@ import chalk from "chalk";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import todoWriteDescription from "../prompts/tools/todo-write.md" with { type: "text" };
-import type { ToolSession } from "../sdk";
 import type { SessionEntry } from "../session/session-manager";
 import { renderStatusLine, renderTreeList } from "../tui";
 import { PREVIEW_LIMITS } from "./render-utils";
+import type { ToolSession } from "./tool-session";
 
 // =============================================================================
 // Types

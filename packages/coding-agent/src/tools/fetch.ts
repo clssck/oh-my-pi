@@ -9,7 +9,6 @@ import { parseHTML } from "linkedom";
 import type { Settings } from "../config/settings";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { type Theme, theme } from "../modes/theme/theme";
-import type { ToolSession } from "../sdk";
 import { DEFAULT_MAX_BYTES, truncateHead } from "../session/streaming-output";
 import { renderStatusLine } from "../tui";
 import { CachedOutputBlock } from "../tui/output-block";
@@ -25,6 +24,7 @@ import { formatStyledArtifactReference, type OutputMeta } from "./output-meta";
 import { formatExpandHint, getDomain } from "./render-utils";
 import { ToolAbortError, ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
+import type { ToolSession } from "./tool-session";
 import { clampTimeout } from "./tool-timeouts";
 
 // =============================================================================

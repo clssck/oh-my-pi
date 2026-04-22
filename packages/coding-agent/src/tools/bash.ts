@@ -13,7 +13,6 @@ import { DEFAULT_MAX_BYTES, TailBuffer } from "../session/streaming-output";
 import { renderStatusLine } from "../tui";
 import { CachedOutputBlock } from "../tui/output-block";
 import { getSixelLineMask } from "../utils/sixel";
-import type { ToolSession } from ".";
 import { type BashInteractiveResult, runInteractiveBashPty } from "./bash-interactive";
 import { checkBashInterception } from "./bash-interceptor";
 import { applyHeadTail } from "./bash-normalize";
@@ -23,6 +22,7 @@ import { resolveToCwd } from "./path-utils";
 import { formatToolWorkingDirectory, replaceTabs } from "./render-utils";
 import { ToolAbortError, ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
+import type { ToolSession } from "./tool-session";
 import { clampTimeout } from "./tool-timeouts";
 
 export const BASH_DEFAULT_PREVIEW_LINES = 10;

@@ -19,7 +19,6 @@ import { isEnoent } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import type { BunFile } from "bun";
 import type { WritethroughCallback, WritethroughDeferredHandle } from "../../lsp";
-import type { ToolSession } from "../../tools";
 import { assertEditableFileContent } from "../../tools/auto-generated-guard";
 import {
 	invalidateFsScanAfterDelete,
@@ -29,6 +28,7 @@ import {
 import { outputMeta } from "../../tools/output-meta";
 import { resolveToCwd } from "../../tools/path-utils";
 import { enforcePlanModeWrite, resolvePlanPath } from "../../tools/plan-mode-guard";
+import type { ToolSession } from "../../tools/tool-session";
 import { generateDiffString } from "../diff";
 import { computeLineHash, formatLineHash } from "../line-hash";
 import { detectLineEnding, normalizeToLF, restoreLineEndings, stripBom } from "../normalize";

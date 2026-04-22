@@ -3,9 +3,9 @@ import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallb
 import { isEnoent, prompt } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import exitPlanModeDescription from "../prompts/tools/exit-plan-mode.md" with { type: "text" };
-import type { ToolSession } from ".";
 import { resolvePlanPath } from "./plan-mode-guard";
 import { ToolError } from "./tool-errors";
+import type { ToolSession } from "./tool-session";
 
 const exitPlanModeSchema = Type.Object({
 	title: Type.String({ description: "Final plan title, e.g. WP_MIGRATION_PLAN" }),

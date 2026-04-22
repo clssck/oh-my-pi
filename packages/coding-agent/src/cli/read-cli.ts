@@ -9,9 +9,9 @@ import chalk from "chalk";
 import { Settings } from "../config/settings";
 import { formatChunkedRead, resolveAnchorStyle } from "../edit/modes/chunk";
 import { getLanguageFromPath } from "../modes/theme/theme";
-import type { ToolSession } from "../tools";
 import { parseReadUrlTarget } from "../tools/fetch";
 import { ReadTool } from "../tools/read";
+import type { ToolSession } from "../tools/tool-session";
 
 export interface ReadCommandArgs {
 	path: string;

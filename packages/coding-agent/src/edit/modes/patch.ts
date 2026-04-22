@@ -17,7 +17,6 @@ import {
 	type WritethroughCallback,
 	type WritethroughDeferredHandle,
 } from "../../lsp";
-import type { ToolSession } from "../../tools";
 import { assertEditableFile } from "../../tools/auto-generated-guard";
 import {
 	invalidateFsScanAfterDelete,
@@ -27,6 +26,7 @@ import {
 import { outputMeta } from "../../tools/output-meta";
 import { resolveToCwd } from "../../tools/path-utils";
 import { enforcePlanModeWrite, resolvePlanPath } from "../../tools/plan-mode-guard";
+import type { ToolSession } from "../../tools/tool-session";
 import {
 	ApplyPatchError,
 	type DiffHunk,

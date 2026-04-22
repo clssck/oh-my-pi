@@ -1,22 +1,10 @@
 import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import type { ToolChoice } from "@oh-my-pi/pi-ai";
 import { $env, $flag, isBunTestRuntime, logger } from "@oh-my-pi/pi-utils";
-import type { AsyncJobManager } from "../async";
-import type { PromptTemplate } from "../config/prompt-templates";
-import type { Settings } from "../config/settings";
 import { EditTool } from "../edit";
-import type { Skill } from "../extensibility/skills";
-import type { InternalUrlRouter } from "../internal-urls";
 import { getPreludeDocs, resetPreludeDocsCache, warmPythonEnvironment } from "../ipy/executor";
 import { checkPythonKernelAvailability } from "../ipy/kernel";
 import { LspTool } from "../lsp";
-import type { DiscoverableMCPSearchIndex, DiscoverableMCPTool } from "../mcp/discoverable-tool-metadata";
-import type { PlanModeState } from "../plan-mode/state";
-import type { CustomMessage } from "../session/messages";
-import type { ToolChoiceQueue } from "../session/tool-choice-queue";
 import { TaskTool } from "../task";
-import type { AgentOutputManager } from "../task/output-manager";
-import type { EventBus } from "../utils/event-bus";
 import { SearchTool } from "../web/search";
 import { AskTool } from "./ask";
 import { AstEditTool } from "./ast-edit";
@@ -25,8 +13,7 @@ import { BashTool } from "./bash";
 import { BrowserTool } from "./browser";
 import { CalculatorTool } from "./calculator";
 import { CancelJobTool } from "./cancel-job";
-import { type CheckpointState, CheckpointTool, RewindTool } from "./checkpoint";
-import type { ContextFileEntry } from "./context-file-entry";
+import { CheckpointTool, RewindTool } from "./checkpoint";
 import { DebugTool } from "./debug";
 import { ExitPlanModeTool } from "./exit-plan-mode";
 import { FindTool } from "./find";
@@ -55,7 +42,8 @@ import { reportFindingTool } from "./review";
 import { SearchToolBm25Tool } from "./search-tool-bm25";
 import { loadSshTool } from "./ssh";
 import { SubmitResultTool } from "./submit-result";
-import { type TodoPhase, TodoWriteTool } from "./todo-write";
+import { TodoWriteTool } from "./todo-write";
+import type { ToolSession } from "./tool-session";
 import { WriteTool } from "./write";
 
 // Exa MCP tools (22 tools)
@@ -75,7 +63,6 @@ export * from "./browser";
 export * from "./calculator";
 export * from "./cancel-job";
 export * from "./checkpoint";
-export type * from "./context-file-entry";
 export * from "./debug";
 export * from "./exit-plan-mode";
 export * from "./find";
@@ -95,6 +82,7 @@ export * from "./search-tool-bm25";
 export * from "./ssh";
 export * from "./submit-result";
 export * from "./todo-write";
+export type * from "./tool-session";
 export * from "./vim";
 export * from "./write";
 
@@ -102,103 +90,6 @@ export * from "./write";
 export type Tool = AgentTool<any, any, any>;
 
 export type { DiscoverableMCPTool } from "../mcp/discoverable-tool-metadata";
-
-/** Session context for tool factories */
-export interface ToolSession {
-	/** Current working directory */
-	cwd: string;
-	/** Whether UI is available */
-	hasUI: boolean;
-	/** Skip Python kernel availability check and warmup */
-	skipPythonPreflight?: boolean;
-	/** Force Python prelude warmup even when test env would normally skip it */
-	forcePythonWarmup?: boolean;
-	/** Pre-loaded context files (AGENTS.md, etc) */
-	contextFiles?: ContextFileEntry[];
-	/** Pre-loaded skills */
-	skills?: Skill[];
-	/** Pre-loaded prompt templates */
-	promptTemplates?: PromptTemplate[];
-	/** Whether LSP integrations are enabled */
-	enableLsp?: boolean;
-	/** Whether an edit-capable tool is available in this session (controls hashline output) */
-	hasEditTool?: boolean;
-	/** Event bus for tool/extension communication */
-	eventBus?: EventBus;
-	/** Output schema for structured completion (subagents) */
-	outputSchema?: unknown;
-	/** Whether to include the submit_result tool by default */
-	requireSubmitResultTool?: boolean;
-	/** Task recursion depth (0 = top-level, 1 = first child, etc.) */
-	taskDepth?: number;
-	/** Get session file */
-	getSessionFile: () => string | null;
-	/** Get Python kernel owner ID for session-scoped retained-kernel cleanup */
-	getPythonKernelOwnerId?: () => string | null;
-	/** Reject new Python work once session disposal has started. */
-	assertPythonExecutionAllowed?: () => void;
-	/** Track tool-owned Python work so session disposal can await/abort it like direct session Python runs. */
-	trackPythonExecution?<T>(execution: Promise<T>, abortController: AbortController): Promise<T>;
-	/** Get session ID */
-	getSessionId?: () => string | null;
-	/** Get artifacts directory for artifact:// URLs */
-	getArtifactsDir?: () => string | null;
-	/** Allocate a new artifact path and ID for session-scoped truncated output. */
-	allocateOutputArtifact?: (toolType: string) => Promise<{ id?: string; path?: string }>;
-	/** Get session spawns */
-	getSessionSpawns: () => string | null;
-	/** Get resolved model string if explicitly set for this session */
-	getModelString?: () => string | undefined;
-	/** Get the current session model string, regardless of how it was chosen */
-	getActiveModelString?: () => string | undefined;
-	/** Auth storage for passing to subagents (avoids re-discovery) */
-	authStorage?: import("../session/auth-storage").AuthStorage;
-	/** Model registry for passing to subagents (avoids re-discovery) */
-	modelRegistry?: import("../config/model-registry").ModelRegistry;
-	/** MCP manager for proxying MCP calls through parent */
-	mcpManager?: import("../mcp/manager").MCPManager;
-	/** Internal URL router for protocols like agent://, skill://, and mcp:// */
-	internalRouter?: InternalUrlRouter;
-	/** Agent output manager for unique agent:// IDs across task invocations */
-	agentOutputManager?: AgentOutputManager;
-	/** Async background job manager for bash/task async execution */
-	asyncJobManager?: AsyncJobManager;
-	/** Settings instance for passing to subagents */
-	settings: Settings;
-	/** Plan mode state (if active) */
-	getPlanModeState?: () => PlanModeState | undefined;
-	/** Get compact conversation context for subagents (excludes tool results, system prompts) */
-	getCompactContext?: () => string;
-	/** Get cached todo phases for this session. */
-	getTodoPhases?: () => TodoPhase[];
-	/** Replace cached todo phases for this session. */
-	setTodoPhases?: (phases: TodoPhase[]) => void;
-	/** Whether MCP tool discovery is active for this session. */
-	isMCPDiscoveryEnabled?: () => boolean;
-	/** Get hidden-but-discoverable MCP tools for search_tool_bm25 prompts and fallbacks. */
-	getDiscoverableMCPTools?: () => DiscoverableMCPTool[];
-	/** Get the cached discoverable MCP search index for search_tool_bm25 execution. */
-	getDiscoverableMCPSearchIndex?: () => DiscoverableMCPSearchIndex;
-	/** Get MCP tools activated by prior search_tool_bm25 calls. */
-	getSelectedMCPToolNames?: () => string[];
-	/** Merge MCP tool selections into the active session tool set. */
-	activateDiscoveredMCPTools?: (toolNames: string[]) => Promise<string[]>;
-	/** The tool-choice queue used to force forthcoming tool invocations and carry invocation handlers. */
-	getToolChoiceQueue?(): ToolChoiceQueue;
-	/** Build a model-provider-specific ToolChoice that targets the named tool, or undefined if unsupported. */
-	buildToolChoice?(toolName: string): ToolChoice | undefined;
-	/** Steer a hidden custom message into the conversation (e.g. a preview reminder). */
-	steer?(message: { customType: string; content: string; details?: unknown }): void;
-	/** Peek the currently in-flight tool-choice queue directive's invocation handler. Used by the `resolve` tool to dispatch to the pending action. */
-	peekQueueInvoker?(): ((input: unknown) => Promise<unknown> | unknown) | undefined;
-	/** Get active checkpoint state if any. */
-	getCheckpointState?: () => CheckpointState | undefined;
-	/** Set or clear active checkpoint state. */
-	setCheckpointState?: (state: CheckpointState | null) => void;
-
-	/** Queue a hidden message to be injected at the next agent turn. */
-	queueDeferredMessage?(message: CustomMessage): void;
-}
 
 type ToolFactory = (session: ToolSession) => Tool | null | Promise<Tool | null>;
 

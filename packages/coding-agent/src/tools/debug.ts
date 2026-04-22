@@ -36,7 +36,6 @@ import type { Theme } from "../modes/theme/theme";
 import debugDescription from "../prompts/tools/debug.md" with { type: "text" };
 import { renderStatusLine } from "../tui";
 import { CachedOutputBlock } from "../tui/output-block";
-import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
 import { resolveToCwd } from "./path-utils";
 import {
@@ -49,6 +48,7 @@ import {
 } from "./render-utils";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
+import type { ToolSession } from "./tool-session";
 import { clampTimeout } from "./tool-timeouts";
 
 const debugSchema = Type.Object({

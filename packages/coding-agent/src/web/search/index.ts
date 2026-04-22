@@ -13,8 +13,8 @@ import type { CustomTool, CustomToolContext, RenderResultOptions } from "../../e
 import type { Theme } from "../../modes/theme/theme";
 import webSearchSystemPrompt from "../../prompts/system/web-search.md" with { type: "text" };
 import webSearchDescription from "../../prompts/tools/web-search.md" with { type: "text" };
-import type { ToolSession } from "../../tools";
 import { formatAge } from "../../tools/render-utils";
+import type { ToolSession } from "../../tools/tool-session";
 import { getSearchProvider, resolveProviderChain, type SearchProvider } from "./provider";
 import { renderSearchCall, renderSearchResult, type SearchRenderDetails } from "./render";
 import type { SearchProviderId, SearchResponse } from "./types";

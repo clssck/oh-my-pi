@@ -11,7 +11,6 @@ import type { Theme } from "../modes/theme/theme";
 import astGrepDescription from "../prompts/tools/ast-grep.md" with { type: "text" };
 import { Ellipsis, Hasher, type RenderCache, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
-import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
 import {
 	combineSearchGlobs,
@@ -32,6 +31,7 @@ import {
 } from "./render-utils";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
+import type { ToolSession } from "./tool-session";
 
 const astGrepSchema = Type.Object({
 	pat: Type.Array(Type.String(), { minItems: 1, description: "AST patterns to match" }),

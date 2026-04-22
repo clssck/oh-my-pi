@@ -371,12 +371,23 @@ fn main() {
 		.file(&scanner_path)
 		// Vendored code: suppress warnings (including the ar -D probe noise on
 		// macOS where Apple's ar rejects the deterministic flag).
-		.cargo_warnings(false);
+		.cargo_warnings(false)
+		// Suppress cc's auto-emitted `cargo:rustc-link-lib=static=...` so we can
+		// re-emit with `+whole-archive`. Without it, the scanner archive is
+		// loaded on-demand and the linker drops it — the parser's references to
+		// tree_sitter_glimmer_external_scanner_* live in a separate static lib,
+		// so nothing pulls the scanner objects in until runtime, where dlopen
+		// fails with "undefined symbol".
+		.cargo_metadata(false);
 
 	#[cfg(target_env = "msvc")]
 	build.flag("-utf-8");
 
 	build.compile("tree-sitter-glimmer-scanner");
+
+	let out_dir = env::var("OUT_DIR").expect("OUT_DIR should be set");
+	println!("cargo:rustc-link-search=native={out_dir}");
+	println!("cargo:rustc-link-lib=static:+whole-archive=tree-sitter-glimmer-scanner");
 }
 
 fn generate_chunk_schema() {

@@ -11,8 +11,8 @@ import {
 	loadImageInput,
 	MAX_IMAGE_INPUT_BYTES,
 } from "../utils/image-loading";
-import type { ToolSession } from "./index";
 import { ToolError } from "./tool-errors";
+import type { ToolSession } from "./tool-session";
 
 const inspectImageSchema = Type.Object(
 	{

@@ -14,12 +14,12 @@ import { getMarkdownTheme, type Theme } from "../modes/theme/theme";
 import pythonDescription from "../prompts/tools/python.md" with { type: "text" };
 import { DEFAULT_MAX_BYTES, OutputSink, type OutputSummary, TailBuffer } from "../session/streaming-output";
 import { getTreeBranch, getTreeContinuePrefix, renderCodeCell } from "../tui";
-import type { ToolSession } from ".";
 import { formatStyledTruncationWarning, type OutputMeta } from "./output-meta";
 import { resolveToCwd } from "./path-utils";
 import { formatTitle, replaceTabs, shortenPath, truncateToWidth, wrapBrackets } from "./render-utils";
 import { ToolAbortError, ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
+import type { ToolSession } from "./tool-session";
 import { clampTimeout } from "./tool-timeouts";
 
 export const PYTHON_DEFAULT_PREVIEW_LINES = 10;

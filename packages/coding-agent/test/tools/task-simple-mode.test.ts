@@ -3,7 +3,7 @@ import { Settings } from "../../src/config/settings";
 import { TaskTool } from "../../src/task";
 import * as discoveryModule from "../../src/task/discovery";
 import type { TaskParams } from "../../src/task/types";
-import type { ToolSession } from "../../src/tools";
+import type { ToolSession } from "../../src/tools/tool-session";
 
 const TEST_AGENTS = [
 	{

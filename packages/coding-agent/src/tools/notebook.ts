@@ -6,10 +6,10 @@ import { isEnoent, untilAborted } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
-import type { ToolSession } from "../sdk";
 import { Hasher, type RenderCache, renderCodeCell, renderStatusLine } from "../tui";
 import { resolveToCwd } from "./path-utils";
 import { formatCount, formatErrorMessage, PREVIEW_LIMITS } from "./render-utils";
+import type { ToolSession } from "./tool-session";
 
 const notebookSchema = Type.Object({
 	action: StringEnum(["edit", "insert", "delete"], {

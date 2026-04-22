@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ToolSession } from "../../src/tools";
 import { resolvePlanPath } from "../../src/tools/plan-mode-guard";
+import type { ToolSession } from "../../src/tools/tool-session";
 
 function makeSession(overrides: {
 	artifactsDir?: string | null;

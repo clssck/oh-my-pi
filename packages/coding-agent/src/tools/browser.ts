@@ -17,7 +17,6 @@ import type {
 	SerializedAXNode,
 } from "puppeteer";
 import browserDescription from "../prompts/tools/browser.md" with { type: "text" };
-import type { ToolSession } from "../sdk";
 import { resizeImage } from "../utils/image-resize";
 import { htmlToBasicMarkdown } from "../web/scrapers/types";
 import type { OutputMeta } from "./output-meta";
@@ -39,6 +38,7 @@ import stealthWorkerScript from "./puppeteer/13_stealth_worker.txt" with { type:
 import { formatScreenshot } from "./render-utils";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
+import type { ToolSession } from "./tool-session";
 import { clampTimeout } from "./tool-timeouts";
 
 /**

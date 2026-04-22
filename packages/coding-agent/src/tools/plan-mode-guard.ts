@@ -1,7 +1,7 @@
 import { resolveLocalUrlToPath } from "../internal-urls";
-import type { ToolSession } from ".";
 import { normalizeLocalScheme, resolveToCwd } from "./path-utils";
 import { ToolError } from "./tool-errors";
+import type { ToolSession } from "./tool-session";
 
 const LOCAL_SCHEME_PREFIX = "local:";
 

@@ -22,7 +22,6 @@ import {
 } from "../vim/render";
 import type { VimFingerprint, VimKeyToken, VimLoadedFile, VimToolDetails, VimViewportLine } from "../vim/types";
 import { VimInputError } from "../vim/types";
-import type { ToolSession } from ".";
 import { parseArchivePathCandidates } from "./archive-reader";
 import { assertEditableFile } from "./auto-generated-guard";
 import { isReadableUrlPath } from "./fetch";
@@ -32,6 +31,7 @@ import { formatDiagnostics, replaceTabs } from "./render-utils";
 import { isSqliteFile, parseSqlitePathCandidates } from "./sqlite-reader";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
+import type { ToolSession } from "./tool-session";
 
 const INTERNAL_URL_PREFIX = /^(agent|artifact|skill|rule|local|mcp):\/\//;
 const utf8Decoder = new TextDecoder("utf-8", { fatal: true });

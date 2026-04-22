@@ -3,10 +3,10 @@ import { prompt } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import checkpointDescription from "../prompts/tools/checkpoint.md" with { type: "text" };
 import rewindDescription from "../prompts/tools/rewind.md" with { type: "text" };
-import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
+import type { ToolSession } from "./tool-session";
 
 export interface CheckpointState {
 	/** Number of in-memory messages at checkpoint (AFTER checkpoint tool result is appended) */

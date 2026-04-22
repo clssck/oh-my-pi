@@ -3,7 +3,7 @@ import { prompt } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import { isBackgroundJobSupportEnabled } from "../async";
 import pollDescription from "../prompts/tools/poll.md" with { type: "text" };
-import type { ToolSession } from "./index";
+import type { ToolSession } from "./tool-session";
 
 const pollSchema = Type.Object({
 	jobs: Type.Optional(

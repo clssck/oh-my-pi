@@ -12,7 +12,7 @@ import chunkEditDescription from "../prompts/tools/chunk-edit.md" with { type: "
 import hashlineDescription from "../prompts/tools/hashline.md" with { type: "text" };
 import patchDescription from "../prompts/tools/patch.md" with { type: "text" };
 import replaceDescription from "../prompts/tools/replace.md" with { type: "text" };
-import type { ToolSession } from "../tools";
+import type { ToolSession } from "../tools/tool-session";
 import { VimTool, vimSchema } from "../tools/vim";
 import { type EditMode, normalizeEditMode, resolveEditMode } from "../utils/edit-mode";
 import type { VimToolDetails } from "../vim/types";

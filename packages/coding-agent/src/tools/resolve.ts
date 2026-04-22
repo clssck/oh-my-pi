@@ -7,9 +7,9 @@ import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import resolveDescription from "../prompts/tools/resolve.md" with { type: "text" };
 import { Ellipsis, padToWidth, renderStatusLine, truncateToWidth } from "../tui";
-import type { ToolSession } from ".";
 import { replaceTabs } from "./render-utils";
 import { ToolError } from "./tool-errors";
+import type { ToolSession } from "./tool-session";
 
 const resolveSchema = Type.Object({
 	action: Type.Union([Type.Literal("apply"), Type.Literal("discard")]),

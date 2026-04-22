@@ -11,7 +11,7 @@ import type { AgentTool } from "@oh-my-pi/pi-agent-core";
 import { $flag, getAgentDir, logger, VERSION } from "@oh-my-pi/pi-utils";
 import { Type } from "@sinclair/typebox";
 import type { Settings } from "..";
-import type { ToolSession } from "./index";
+import type { ToolSession } from "./tool-session";
 
 const ReportToolIssueParams = Type.Object({
 	tool: Type.String({ description: "Name of the tool that behaved unexpectedly" }),

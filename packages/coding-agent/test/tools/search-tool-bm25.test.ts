@@ -5,12 +5,12 @@ import {
 	buildDiscoverableMCPSearchIndex,
 	type DiscoverableMCPSearchIndex,
 } from "../../src/mcp/discoverable-tool-metadata";
-import type { ToolSession } from "../../src/tools/index";
 import {
 	renderSearchToolBm25Description,
 	SearchToolBm25Tool,
 	searchToolBm25Renderer,
 } from "../../src/tools/search-tool-bm25";
+import type { ToolSession } from "../../src/tools/tool-session";
 
 type TestDiscoverableMCPTool = {
 	name: string;

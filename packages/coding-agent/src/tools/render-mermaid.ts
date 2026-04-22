@@ -2,7 +2,7 @@ import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallb
 import { type MermaidAsciiRenderOptions, prompt, renderMermaidAscii } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import renderMermaidDescription from "../prompts/tools/render-mermaid.md" with { type: "text" };
-import type { ToolSession } from "./index";
+import type { ToolSession } from "./tool-session";
 
 const renderMermaidSchema = Type.Object({
 	mermaid: Type.String({ description: "Mermaid graph source text" }),

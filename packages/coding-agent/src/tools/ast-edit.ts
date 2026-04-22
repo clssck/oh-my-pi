@@ -11,7 +11,6 @@ import type { Theme } from "../modes/theme/theme";
 import astEditDescription from "../prompts/tools/ast-edit.md" with { type: "text" };
 import { Ellipsis, Hasher, type RenderCache, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
-import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
 import {
 	combineSearchGlobs,
@@ -33,6 +32,7 @@ import {
 import { queueResolveHandler } from "./resolve";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
+import type { ToolSession } from "./tool-session";
 
 const astEditOpSchema = Type.Object({
 	pat: Type.String({ description: "AST pattern to match" }),

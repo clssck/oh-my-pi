@@ -19,22 +19,13 @@ import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@oh-my
 import type { Usage } from "@oh-my-pi/pi-ai";
 import { $env, prompt, Snowflake } from "@oh-my-pi/pi-utils";
 import type { TSchema } from "@sinclair/typebox";
-import type { AsyncJobManager } from "../async";
-import type { ModelRegistry } from "../config/model-registry";
 import { resolveAgentModelPatterns } from "../config/model-resolver";
-import type { PromptTemplate } from "../config/prompt-templates";
-import type { Settings } from "../config/settings";
-import type { Skill } from "../extensibility/skills";
-import type { MCPManager } from "../mcp/manager";
 import type { Theme } from "../modes/theme/theme";
-import type { PlanModeState } from "../plan-mode/state";
 import planModeSubagentPrompt from "../prompts/system/plan-mode-subagent.md" with { type: "text" };
 import taskDescriptionTemplate from "../prompts/tools/task.md" with { type: "text" };
 import taskSummaryTemplate from "../prompts/tools/task-summary.md" with { type: "text" };
-import type { AuthStorage } from "../session/auth-storage";
-import type { ContextFileEntry } from "../tools/context-file-entry";
 import { formatBytes, formatDuration } from "../tools/render-utils";
-import type { EventBus } from "../utils/event-bus";
+import type { ToolSession } from "../tools/tool-session";
 // Import review tools for side effects (registers subagent tool handlers)
 import "../tools/review";
 import { generateCommitMessage } from "../utils/commit-message-generator";
@@ -72,30 +63,6 @@ import {
 	mergeTaskBranches,
 	type WorktreeBaseline,
 } from "./worktree";
-
-interface TaskToolSession {
-	cwd: string;
-	contextFiles?: ContextFileEntry[];
-	skills?: Skill[];
-	promptTemplates?: PromptTemplate[];
-	eventBus?: EventBus;
-	outputSchema?: unknown;
-	taskDepth?: number;
-	getSessionFile(): string | null;
-	getSessionId?(): string | null;
-	getArtifactsDir?(): string | null;
-	getSessionSpawns(): string | null;
-	getModelString?(): string | undefined;
-	getActiveModelString?(): string | undefined;
-	authStorage?: AuthStorage;
-	modelRegistry?: ModelRegistry;
-	mcpManager?: MCPManager;
-	agentOutputManager?: AgentOutputManager;
-	asyncJobManager?: AsyncJobManager;
-	settings: Settings;
-	getPlanModeState?(): PlanModeState | undefined;
-	getCompactContext?(): string;
-}
 
 function createUsageTotals(): Usage {
 	return {
@@ -256,7 +223,7 @@ export class TaskTool implements AgentTool<TSchema, TaskToolDetails, Theme> {
 		);
 	}
 	private constructor(
-		private readonly session: TaskToolSession,
+		private readonly session: ToolSession,
 		discoveredAgents: AgentDefinition[],
 	) {
 		this.#blockedAgent = $env.PI_BLOCKED_AGENT;
@@ -270,7 +237,7 @@ export class TaskTool implements AgentTool<TSchema, TaskToolDetails, Theme> {
 	/**
 	 * Create a TaskTool instance with async agent discovery.
 	 */
-	static async create(session: TaskToolSession): Promise<TaskTool> {
+	static async create(session: ToolSession): Promise<TaskTool> {
 		const { agents } = await discoverAgents(session.cwd);
 		return new TaskTool(session, agents);
 	}

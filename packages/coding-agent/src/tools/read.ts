@@ -23,7 +23,6 @@ import type { InternalUrl } from "../internal-urls/types";
 import { getLanguageFromPath, type Theme } from "../modes/theme/theme";
 import readDescription from "../prompts/tools/read.md" with { type: "text" };
 import readChunkDescription from "../prompts/tools/read-chunk.md" with { type: "text" };
-import type { ToolSession } from "../sdk";
 import {
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
@@ -70,6 +69,7 @@ import {
 } from "./sqlite-reader";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
+import type { ToolSession } from "./tool-session";
 
 const PROSE_LANGUAGES = new Set(["markdown", "text", "log", "asciidoc", "restructuredtext"]);
 

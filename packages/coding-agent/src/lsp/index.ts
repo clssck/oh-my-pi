@@ -5,9 +5,9 @@ import { logger, once, prompt, untilAborted } from "@oh-my-pi/pi-utils";
 import type { BunFile } from "bun";
 import { type Theme, theme } from "../modes/theme/theme";
 import lspDescription from "../prompts/tools/lsp.md" with { type: "text" };
-import type { ToolSession } from "../tools";
 import { resolveToCwd } from "../tools/path-utils";
 import { ToolAbortError, throwIfAborted } from "../tools/tool-errors";
+import type { ToolSession } from "../tools/tool-session";
 import { clampTimeout } from "../tools/tool-timeouts";
 import {
 	ensureFileOpen,

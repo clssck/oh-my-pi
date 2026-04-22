@@ -8,10 +8,10 @@ import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import { isEnoent } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import type { WritethroughCallback, WritethroughDeferredHandle } from "../../lsp";
-import type { ToolSession } from "../../tools";
 import { invalidateFsScanAfterWrite } from "../../tools/fs-cache-invalidation";
 import { outputMeta } from "../../tools/output-meta";
 import { enforcePlanModeWrite, resolvePlanPath } from "../../tools/plan-mode-guard";
+import type { ToolSession } from "../../tools/tool-session";
 import { generateDiffString, replaceText } from "../diff";
 import {
 	countLeadingWhitespace,

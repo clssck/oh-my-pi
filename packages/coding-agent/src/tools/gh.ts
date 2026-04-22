@@ -13,10 +13,10 @@ import ghRunWatchDescription from "../prompts/tools/gh-run-watch.md" with { type
 import ghSearchIssuesDescription from "../prompts/tools/gh-search-issues.md" with { type: "text" };
 import ghSearchPrsDescription from "../prompts/tools/gh-search-prs.md" with { type: "text" };
 import * as git from "../utils/git";
-import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
 import { ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
+import type { ToolSession } from "./tool-session";
 
 const GH_REPO_FIELDS = [
 	"nameWithOwner",

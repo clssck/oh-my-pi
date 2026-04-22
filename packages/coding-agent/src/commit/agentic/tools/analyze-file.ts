@@ -9,7 +9,7 @@ import type { CustomTool, CustomToolContext } from "../../../extensibility/custo
 import type { AuthStorage } from "../../../session/auth-storage";
 import { TaskTool } from "../../../task";
 import type { TaskParams } from "../../../task/types";
-import type { ToolSession } from "../../../tools";
+import type { ToolSession } from "../../../tools/tool-session";
 import { getFilePriority } from "./git-file-diff";
 
 const analyzeFileSchema = Type.Object({

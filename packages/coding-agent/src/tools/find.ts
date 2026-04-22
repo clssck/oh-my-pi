@@ -20,13 +20,13 @@ import {
 	renderTreeList,
 	truncateToWidth,
 } from "../tui";
-import type { ToolSession } from ".";
 import { applyListLimit } from "./list-limit";
 import { formatFullOutputReference, type OutputMeta } from "./output-meta";
 import { normalizePathLikeInput, parseFindPattern, resolveMultiFindPattern, resolveToCwd } from "./path-utils";
 import { formatCount, formatEmptyMessage, formatErrorMessage, PREVIEW_LIMITS } from "./render-utils";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
+import type { ToolSession } from "./tool-session";
 
 const findSchema = Type.Object({
 	pattern: Type.String({
