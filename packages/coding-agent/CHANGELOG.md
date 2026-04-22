@@ -46,6 +46,7 @@
 
 ### Added
 
+- Added a full-screen session observer viewer with scrolling, expand/collapse, markdown rendering, error visibility, and sub-agent cycling ([#743](https://github.com/can1357/oh-my-pi/pull/743) by [@DamanHanzo](https://github.com/DamanHanzo))
 - Added Vim ex aliases `:del`, `:ya`, `:co`, and `:mo` as shorthand for existing delete, yank, copy, and move commands
 - Added support for additional Vim ex command aliases `:write`/`write!`, `:edit`/`edit!`, and `:update`/`:up` in command parsing
 - Added support for vim `:global` and `:vglobal`/`/` variants as `:g/pattern/d` and `:v/pattern/d` parsing and execution
