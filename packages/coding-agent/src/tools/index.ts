@@ -11,6 +11,7 @@ import { AstEditTool } from "./ast-edit";
 import { AstGrepTool } from "./ast-grep";
 import { BashTool } from "./bash";
 import { BrowserTool } from "./browser";
+import type { ToolName } from "./builtin-tool-names";
 import { CalculatorTool } from "./calculator";
 import { CancelJobTool } from "./cancel-job";
 import { CheckpointTool, RewindTool } from "./checkpoint";
@@ -60,6 +61,7 @@ export * from "./ast-edit";
 export * from "./ast-grep";
 export * from "./bash";
 export * from "./browser";
+export * from "./builtin-tool-names";
 export * from "./calculator";
 export * from "./cancel-job";
 export * from "./checkpoint";
@@ -93,7 +95,7 @@ export type { DiscoverableMCPTool } from "../mcp/discoverable-tool-metadata";
 
 type ToolFactory = (session: ToolSession) => Tool | null | Promise<Tool | null>;
 
-export const BUILTIN_TOOLS: Record<string, ToolFactory> = {
+export const BUILTIN_TOOLS: Record<ToolName, ToolFactory> = {
 	ast_grep: s => new AstGrepTool(s),
 	ast_edit: s => new AstEditTool(s),
 	render_mermaid: s => new RenderMermaidTool(s),
@@ -139,7 +141,7 @@ export const HIDDEN_TOOLS: Record<string, ToolFactory> = {
 	resolve: s => new ResolveTool(s),
 };
 
-export type ToolName = keyof typeof BUILTIN_TOOLS;
+export type { ToolName } from "./builtin-tool-names";
 
 export type PythonToolMode = "ipy-only" | "bash-only" | "both";
 

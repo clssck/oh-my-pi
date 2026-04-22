@@ -217,6 +217,11 @@ describe("parseArgs", () => {
 			const result = parseArgs(["--tools", "Read,Grep"]);
 			expect(result.tools).toEqual(["read", "grep"]);
 		});
+
+		test("ignores unknown tool names passed to --tools", () => {
+			const result = parseArgs(["--tools", "read,not-a-tool,grep"]);
+			expect(result.tools).toEqual(["read", "grep"]);
+		});
 	});
 
 	describe("--no-lsp flag", () => {

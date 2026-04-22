@@ -5,7 +5,7 @@ import { type Effort, THINKING_EFFORTS } from "@oh-my-pi/pi-ai";
 import { APP_NAME, CONFIG_DIR_NAME, logger } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { parseEffort } from "../thinking";
-import { BUILTIN_TOOLS } from "../tools";
+import { BUILTIN_TOOL_NAMES, isBuiltinToolName } from "../tools/builtin-tool-names";
 
 export type Mode = "text" | "json" | "rpc" | "acp";
 
@@ -121,12 +121,12 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 				.filter(Boolean);
 			const validTools: string[] = [];
 			for (const name of toolNames) {
-				if (name in BUILTIN_TOOLS) {
+				if (isBuiltinToolName(name)) {
 					validTools.push(name);
 				} else {
 					logger.warn("Unknown tool passed to --tools", {
 						tool: name,
-						validTools: Object.keys(BUILTIN_TOOLS),
+						validTools: BUILTIN_TOOL_NAMES,
 					});
 				}
 			}

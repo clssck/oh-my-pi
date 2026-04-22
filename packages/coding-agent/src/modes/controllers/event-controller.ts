@@ -11,7 +11,7 @@ import { getSymbolTheme, theme } from "../../modes/theme/theme";
 import type { InteractiveModeContext, TodoPhase } from "../../modes/types";
 import type { AgentSessionEvent } from "../../session/agent-session";
 import { calculatePromptTokens } from "../../session/compaction/compaction";
-import type { ExitPlanModeDetails } from "../../tools";
+import type { ExitPlanModeDetails } from "../../tools/exit-plan-mode";
 
 type AgentSessionEventKind = AgentSessionEvent["type"];
 
