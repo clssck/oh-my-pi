@@ -59,6 +59,22 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 		unknownFlags: new Map(),
 	};
 
+	// Normalize `--flag=value` into `--flag` + `value` so the dispatch loop
+	// below (which only matches exact flag names) handles both forms. Leaves
+	// short flags (`-x`), positional args, and non-equals tokens untouched.
+	const normalized: string[] = [];
+	for (const arg of args) {
+		if (arg.startsWith("--") && arg.length > 2) {
+			const eq = arg.indexOf("=");
+			if (eq > 2) {
+				normalized.push(arg.slice(0, eq), arg.slice(eq + 1));
+				continue;
+			}
+		}
+		normalized.push(arg);
+	}
+	args = normalized;
+
 	for (let i = 0; i < args.length; i++) {
 		const arg = args[i];
 

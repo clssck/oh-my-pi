@@ -7,6 +7,7 @@
  */
 import type { AssistantMessage, ImageContent } from "@oh-my-pi/pi-ai";
 import { sanitizeText } from "@oh-my-pi/pi-natives";
+import { writeJsonLineSync } from "@oh-my-pi/pi-utils";
 import type { AgentSession } from "../session/agent-session";
 
 /**
@@ -34,7 +35,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 	if (mode === "json") {
 		const header = session.sessionManager.getHeader();
 		if (header) {
-			process.stdout.write(`${JSON.stringify(header)}\n`);
+			writeJsonLineSync(process.stdout.fd, header);
 		}
 	}
 	// Set up extensions for print mode (no UI, no command context)
@@ -146,7 +147,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 	session.subscribe(event => {
 		// In JSON mode, output all events
 		if (mode === "json") {
-			process.stdout.write(`${JSON.stringify(event)}\n`);
+			writeJsonLineSync(process.stdout.fd, event);
 		}
 	});
 

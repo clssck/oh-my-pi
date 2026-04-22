@@ -10,7 +10,7 @@
  * - Events: AgentSessionEvent objects streamed as they occur
  * - Extension UI: Extension UI requests are emitted, client responds with extension_ui_response
  */
-import { $env, readJsonl, Snowflake } from "@oh-my-pi/pi-utils";
+import { $env, readJsonl, Snowflake, writeJsonLineSync } from "@oh-my-pi/pi-utils";
 import type {
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
@@ -143,9 +143,9 @@ export function requestRpcEditor(
  */
 export async function runRpcMode(session: AgentSession): Promise<never> {
 	// Signal to RPC clients that the server is ready to accept commands
-	process.stdout.write(`${JSON.stringify({ type: "ready" })}\n`);
+	writeJsonLineSync(process.stdout.fd, { type: "ready" });
 	const output = (obj: RpcResponse | RpcExtensionUIRequest | object) => {
-		process.stdout.write(`${JSON.stringify(obj)}\n`);
+		writeJsonLineSync(process.stdout.fd, obj);
 	};
 	const emitRpcTitles = shouldEmitRpcTitles();
 

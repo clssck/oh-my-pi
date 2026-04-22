@@ -275,4 +275,56 @@ describe("parseArgs", () => {
 			expect(result.messages).toEqual(["Do the task"]);
 		});
 	});
+
+	describe("--flag=value equals syntax", () => {
+		test("parses --model=value", () => {
+			const result = parseArgs(["--model=opus"]);
+			expect(result.model).toBe("opus");
+		});
+
+		test("parses --append-system-prompt=value (the adversarial-test bug)", () => {
+			const result = parseArgs(["--append-system-prompt=EXTRA"]);
+			expect(result.appendSystemPrompt).toBe("EXTRA");
+		});
+
+		test("parses --system-prompt=value", () => {
+			const result = parseArgs(["--system-prompt=You are X"]);
+			expect(result.systemPrompt).toBe("You are X");
+		});
+
+		test("parses --mode=json", () => {
+			const result = parseArgs(["--mode=json"]);
+			expect(result.mode).toBe("json");
+		});
+
+		test("preserves equals signs inside the value", () => {
+			const result = parseArgs(["--append-system-prompt=a=b=c"]);
+			expect(result.appendSystemPrompt).toBe("a=b=c");
+		});
+
+		test("allows empty value via --flag=", () => {
+			const result = parseArgs(["--append-system-prompt="]);
+			expect(result.appendSystemPrompt).toBe("");
+		});
+
+		test("mixes equals and space-separated values", () => {
+			const result = parseArgs(["--model=opus", "--append-system-prompt", "EXTRA", "--thinking=high"]);
+			expect(result.model).toBe("opus");
+			expect(result.appendSystemPrompt).toBe("EXTRA");
+			expect(result.thinking).toBe(Effort.High);
+		});
+
+		test("does not split short flags containing equals", () => {
+			// -p is a boolean flag; `-p=foo` is not standard. We only normalize long flags.
+			const result = parseArgs(["-p", "hello"]);
+			expect(result.print).toBe(true);
+			expect(result.messages).toContain("hello");
+		});
+
+		test("does not split positional args containing equals", () => {
+			const result = parseArgs(["key=value"]);
+			expect(result.messages).toContain("key=value");
+			expect(result.model).toBeUndefined();
+		});
+	});
 });
