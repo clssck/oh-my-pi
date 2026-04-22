@@ -23,7 +23,7 @@ export function StringEnum<const T extends readonly string[]>(
 		type: "string",
 		enum: values as unknown as string[],
 		...(options?.description && { description: options.description }),
-		...(options?.default && { default: options.default }),
+		...(options?.default !== undefined && { default: options.default }),
 	});
 }
 
@@ -187,6 +187,16 @@ export function sanitizeSchemaForStrictMode(
 		}
 
 		if (key === "additionalProperties") {
+			continue;
+		}
+
+		if (key === "description" && typeof value === "string" && schema.default !== undefined) {
+			// Preserve `default:` info for strict-mode providers that strip the keyword.
+			// Inline as `(default: X)` text in the description, matching the convention for
+			// runtime-placeholder defaults (e.g. `cwd`) that cannot live in the keyword form.
+			const defaultVal = schema.default;
+			const formatted = typeof defaultVal === "string" ? defaultVal : JSON.stringify(defaultVal);
+			sanitized.description = value.includes("(default:") ? value : `${value} (default: ${formatted})`;
 			continue;
 		}
 

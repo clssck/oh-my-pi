@@ -181,6 +181,15 @@ describe("system Handlebars prompt templates", () => {
 		expect(rendered).toContain("call `search_tool_bm25` before concluding no such tool exists");
 	});
 
+	test("system-prompt uses `sel` guidance for targeted read ranges", async () => {
+		const templatePath = path.join(systemPromptsDir, "system-prompt.md");
+		const template = await Bun.file(templatePath).text();
+		const rendered = prompt.render(template, baseRenderContext);
+
+		expect(rendered).toContain("Use `read` with `sel` for targeted line ranges rather than whole-file reads.");
+		expect(rendered).not.toContain("Use `read` with offset or limit rather than whole-file reads when practical.");
+	});
+
 	test("buildSystemPrompt deduplicates always-apply rules already present in SYSTEM.md", async () => {
 		const duplicateRule = ["Use static imports.", "", "Do not use dynamic loading."].join("\n");
 		const distinctRule = "Validate inputs at boundaries.";

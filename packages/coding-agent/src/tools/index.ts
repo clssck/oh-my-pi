@@ -26,6 +26,7 @@ import { BrowserTool } from "./browser";
 import { CalculatorTool } from "./calculator";
 import { CancelJobTool } from "./cancel-job";
 import { type CheckpointState, CheckpointTool, RewindTool } from "./checkpoint";
+import type { ContextFileEntry } from "./context-file-entry";
 import { DebugTool } from "./debug";
 import { ExitPlanModeTool } from "./exit-plan-mode";
 import { FindTool } from "./find";
@@ -74,6 +75,7 @@ export * from "./browser";
 export * from "./calculator";
 export * from "./cancel-job";
 export * from "./checkpoint";
+export type * from "./context-file-entry";
 export * from "./debug";
 export * from "./exit-plan-mode";
 export * from "./find";
@@ -98,12 +100,6 @@ export * from "./write";
 
 /** Tool type (AgentTool from pi-ai) */
 export type Tool = AgentTool<any, any, any>;
-
-export type ContextFileEntry = {
-	path: string;
-	content: string;
-	depth?: number;
-};
 
 export type { DiscoverableMCPTool } from "../mcp/discoverable-tool-metadata";
 
@@ -235,7 +231,7 @@ export const BUILTIN_TOOLS: Record<string, ToolFactory> = {
 	browser: s => new BrowserTool(s),
 	checkpoint: CheckpointTool.createIf,
 	rewind: RewindTool.createIf,
-	task: TaskTool.create,
+	task: session => TaskTool.create(session),
 	cancel_job: CancelJobTool.createIf,
 	poll: PollTool.createIf,
 	todo_write: s => new TodoWriteTool(s),
