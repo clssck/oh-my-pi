@@ -27,6 +27,13 @@ import { normalizeResponsesToolCallId } from "../utils";
 import type { AssistantMessageEventStream } from "../utils/event-stream";
 import { parseStreamingJson } from "../utils/json-parse";
 
+// Matches the volatile tail substituted into the system prompt template at
+// render time (`{{cwd}}` + `{{date}}` in system-prompt.md). Stripping this
+// tail before hashing keeps the prompt_cache_key stable across midnight and
+// cwd switches so the cache route does not rotate while the content prefix
+// is still identical.
+const VOLATILE_CWD_DATE_TAIL = /\n*The current working directory is '[^']*'\.\nToday is '[^']*'\.\s*Begin now\.\s*$/;
+
 /**
  * Derive a stable prompt_cache_key for OpenAI-style Responses endpoints.
  *
@@ -36,6 +43,13 @@ import { parseStreamingJson } from "../utils/json-parse";
  * `(modelId, systemPrompt)` collapses distinct sessionIds onto one cache
  * route per `(model, systemPrompt)` tuple. Repeat fresh sessions with the
  * same system prompt share a cache slot and hit on turn 1.
+ *
+ * Additional stabilization: the system prompt template ends with a volatile
+ * two-line tail naming the current working directory and today's date. If
+ * those substituted values participate in the hash, the routing key rotates
+ * every midnight and every time the user switches project cwd, forcing a
+ * cold miss on what would otherwise be a warm prefix. Strip that known tail
+ * before hashing so the key stays stable when only cwd/date change.
  *
  * Opt-outs:
  * - `sessionId === undefined` returns `undefined` so callers that want no
@@ -50,7 +64,8 @@ export function derivePromptCacheKey(
 ): string | undefined {
 	if (!sessionId) return undefined;
 	if (!systemPrompt) return sessionId;
-	return `omp-${Bun.hash(`${modelId}\u0000${systemPrompt}`).toString(36)}`;
+	const stable = systemPrompt.replace(VOLATILE_CWD_DATE_TAIL, "");
+	return `omp-${Bun.hash(`${modelId}\u0000${stable}`).toString(36)}`;
 }
 
 export function encodeTextSignatureV1(id: string, phase?: TextSignatureV1["phase"]): string {
