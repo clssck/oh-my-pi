@@ -212,6 +212,110 @@ describe("Anthropic request fingerprint alignment", () => {
 		expect(embeddedClaudeCliHeaders["User-Agent"]).toBe(`claude-cli/${claudeCodeVersion} (external, cli)`);
 	});
 
+	it("splits the standard volatile cwd+date tail into its own uncached block", () => {
+		const PROMPT =
+			"You are helpful. Do things.\nThe current working directory is '/tmp/foo'.\nToday is '2026-04-23'. Begin now.";
+		const blocks = buildAnthropicSystemBlocks(PROMPT, { cacheControl: { type: "ephemeral" } });
+		expect(blocks).toBeDefined();
+		expect(blocks?.length).toBe(2);
+		expect(blocks?.[0]).toEqual({
+			type: "text",
+			text: "You are helpful. Do things.",
+			cache_control: { type: "ephemeral" },
+		});
+		expect(blocks?.[1]).toEqual({
+			type: "text",
+			text: "\nThe current working directory is '/tmp/foo'.\nToday is '2026-04-23'. Begin now.",
+		});
+		expect(blocks?.[1]).not.toHaveProperty("cache_control");
+	});
+
+	it("splits the custom-prompt volatile tail into its own uncached block", () => {
+		const PROMPT = "System instructions here.\nCurrent date: 2026-04-23\nCurrent working directory: /tmp/bar";
+		const blocks = buildAnthropicSystemBlocks(PROMPT, { cacheControl: { type: "ephemeral" } });
+		expect(blocks).toBeDefined();
+		expect(blocks?.length).toBe(2);
+		expect(blocks?.[0]?.text).toBe("System instructions here.");
+		expect(blocks?.[0]?.cache_control).toEqual({ type: "ephemeral" });
+		expect(blocks?.[1]?.text).toBe("\nCurrent date: 2026-04-23\nCurrent working directory: /tmp/bar");
+		expect(blocks?.[1]?.cache_control).toBeUndefined();
+	});
+
+	it("does not split when no known volatile tail is present", () => {
+		const PROMPT = "You are helpful. Stay concise.";
+		const blocks = buildAnthropicSystemBlocks(PROMPT, { cacheControl: { type: "ephemeral" } });
+		expect(blocks).toBeDefined();
+		expect(blocks?.length).toBe(1);
+		expect(blocks?.[0]).toEqual({ type: "text", text: PROMPT, cache_control: { type: "ephemeral" } });
+	});
+
+	it("does not split when cacheControl is not provided (no caching)", () => {
+		const PROMPT =
+			"You are helpful.\nThe current working directory is '/tmp/foo'.\nToday is '2026-04-23'. Begin now.";
+		const blocks = buildAnthropicSystemBlocks(PROMPT);
+		expect(blocks).toBeDefined();
+		expect(blocks?.length).toBe(1);
+		expect(blocks?.[0]?.text).toBe(PROMPT);
+		expect(blocks?.[0]?.cache_control).toBeUndefined();
+	});
+
+	it("splits correctly when the system prompt uses CRLF line endings (Windows checkout)", () => {
+		const PROMPT =
+			"You are helpful.\r\nStay concise.\r\nThe current working directory is '/tmp/foo'.\r\nToday is '2026-04-23'. Begin now.";
+		const blocks = buildAnthropicSystemBlocks(PROMPT, { cacheControl: { type: "ephemeral" } });
+		expect(blocks).toBeDefined();
+		expect(blocks?.length).toBe(2);
+		// stable ends just before the matched \n (i.e. at the \r of the CRLF)
+		expect(blocks?.[0]?.text).toBe("You are helpful.\r\nStay concise.\r");
+		expect(blocks?.[0]?.cache_control).toEqual({ type: "ephemeral" });
+		expect(blocks?.[1]?.text).toBe(
+			"\nThe current working directory is '/tmp/foo'.\r\nToday is '2026-04-23'. Begin now.",
+		);
+		expect(blocks?.[1]?.cache_control).toBeUndefined();
+		// Critical: concatenated bytes match the original input exactly.
+		expect((blocks ?? []).map(b => b.text).join("")).toBe(PROMPT);
+	});
+
+	it("falls back to single block when stable prefix would be empty", () => {
+		// Pathological case: prompt starts with marker directly, so splitting
+		// would yield stable="" which Anthropic rejects. Must fall back.
+		const PROMPT = "\nThe current working directory is '/tmp'.\nToday is '2026-04-23'. Begin now.";
+		const blocks = buildAnthropicSystemBlocks(PROMPT, { cacheControl: { type: "ephemeral" } });
+		expect(blocks).toBeDefined();
+		expect(blocks?.length).toBe(1);
+		expect(blocks?.[0]?.text).toBe(PROMPT);
+		expect(blocks?.[0]?.cache_control).toEqual({ type: "ephemeral" });
+	});
+
+	it("splits regardless of trailing whitespace after 'Begin now.'", () => {
+		for (const trail of ["", "\n", "\n\n\n", "  ", "\t", " \n \n"]) {
+			const PROMPT = `Header.\nThe current working directory is '/tmp'.\nToday is '2026-04-23'. Begin now.${trail}`;
+			const blocks = buildAnthropicSystemBlocks(PROMPT, { cacheControl: { type: "ephemeral" } });
+			expect(blocks?.length).toBe(2);
+			expect(blocks?.[0]?.text).toBe("Header.");
+		}
+	});
+
+	it("keeps billing block and Claude Code identity when splitting volatile tail", () => {
+		const PROMPT =
+			"You are helpful.\nThe current working directory is '/tmp/foo'.\nToday is '2026-04-23'. Begin now.";
+		const blocks = buildAnthropicSystemBlocks(PROMPT, {
+			includeClaudeCodeInstruction: true,
+			cacheControl: { type: "ephemeral" },
+		});
+		expect(blocks).toBeDefined();
+		// [0] billing header, [1] claudeCodeSystemInstruction, [2] stable-prefix+CC, [3] volatile-tail no CC
+		expect(blocks?.length).toBe(4);
+		expect(blocks?.[0]?.text.startsWith("x-anthropic-billing-header:")).toBe(true);
+		expect(blocks?.[1]?.text).toBe(claudeCodeSystemInstruction);
+		expect(blocks?.[2]?.text).toBe("You are helpful.");
+		expect(blocks?.[2]?.cache_control).toEqual({ type: "ephemeral" });
+		expect(blocks?.[3]?.text).toBe(
+			"\nThe current working directory is '/tmp/foo'.\nToday is '2026-04-23'. Begin now.",
+		);
+		expect(blocks?.[3]?.cache_control).toBeUndefined();
+	});
+
 	it("skips Claude Code instruction injection for claude-3-5-haiku models", async () => {
 		const payload = (await captureAnthropicPayload(
 			{ ...ANTHROPIC_MODEL, id: "claude-3-5-haiku", name: "Claude 3.5 Haiku" },

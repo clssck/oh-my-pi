@@ -51,10 +51,10 @@ import { parseStreamingJson } from "../utils/json-parse";
 // regress to pre-fix behavior. Use position-based stripping via `lastIndexOf`
 // on a stable marker so value contents never break the strip.
 const STANDARD_TAIL_MARKER = "\nThe current working directory is '";
-const STANDARD_TAIL_STRUCTURE = /'\.\nToday is '[\s\S]*'\.\s*Begin now\.\s*$/;
+const STANDARD_TAIL_STRUCTURE = /'\.\r?\nToday is '[\s\S]*'\.\s*Begin now\.\s*$/;
 
 const CUSTOM_TAIL_MARKER = "\nCurrent date: ";
-const CUSTOM_TAIL_STRUCTURE = /^[^\n]+\nCurrent working directory: [\s\S]*$/;
+const CUSTOM_TAIL_STRUCTURE = /^[^\r\n]+\r?\nCurrent working directory: [\s\S]*$/;
 
 function stripByMarker(systemPrompt: string, marker: string, structure: RegExp): string | null {
 	const idx = systemPrompt.lastIndexOf(marker);
@@ -64,12 +64,28 @@ function stripByMarker(systemPrompt: string, marker: string, structure: RegExp):
 	return systemPrompt.slice(0, idx);
 }
 
-function stripVolatileTail(systemPrompt: string): string {
-	return (
+/**
+ * Split the system prompt into its stable prefix and its volatile tail.
+ *
+ * The Oh My Pi prompt templates end with one of two known variable tails
+ * (cwd + date). Callers that cache-key on the system prompt need the stable
+ * prefix; callers that cache the *content* (Anthropic) need both parts as
+ * separate blocks so the tail's per-day/per-cwd churn doesn't invalidate the
+ * stable prefix's cache breakpoint.
+ *
+ * Returns `tail === ""` when no known tail is present, so callers can treat a
+ * non-empty `tail` as the signal to split.
+ */
+export function splitVolatileTail(systemPrompt: string): { stable: string; tail: string } {
+	const stripped =
 		stripByMarker(systemPrompt, STANDARD_TAIL_MARKER, STANDARD_TAIL_STRUCTURE) ??
-		stripByMarker(systemPrompt, CUSTOM_TAIL_MARKER, CUSTOM_TAIL_STRUCTURE) ??
-		systemPrompt
-	);
+		stripByMarker(systemPrompt, CUSTOM_TAIL_MARKER, CUSTOM_TAIL_STRUCTURE);
+	if (stripped === null) return { stable: systemPrompt, tail: "" };
+	return { stable: stripped, tail: systemPrompt.slice(stripped.length) };
+}
+
+export function stripVolatileTail(systemPrompt: string): string {
+	return splitVolatileTail(systemPrompt).stable;
 }
 
 /**
