@@ -11,6 +11,7 @@
 ### Fixed
 
 - Stabilized prompt-cache routing across OpenAI Codex, direct OpenAI Responses, Azure OpenAI Responses, and Anthropic by deriving cache affinity from stable model/system-prompt content while ignoring volatile cwd/date/custom-prompt tails.
+- Stopped treating OpenAI Codex WebSocket connect timeouts as session-fatal errors, allowing the current request to fall back to SSE without permanently disabling WebSocket append-chain reuse for later turns.
 - Fixed Cursor provider losing conversation history on follow-up turns (model responding "this appears to be the start of our session") by populating `ConversationStateStructure.rootPromptMessagesJson` with JSON blob IDs for the system prompt plus prior user/assistant/tool-result messages. Cursor's server builds the model prompt from `rootPromptMessagesJson`, not from the protobuf `turns[]` tree, so sending only the system prompt there caused prior turns to be dropped
 - Fixed Cursor provider multi-turn conversations failing with `Connect error internal: Blob not found` on the second message by storing `ConversationStateStructure.turns`, `AgentConversationTurnStructure.user_message`, and `AgentConversationTurnStructure.steps` as content-addressed blob IDs in the KV store (matching the existing handling for `rootPromptMessagesJson`) rather than sending the raw serialized bytes inline ([#678](https://github.com/can1357/oh-my-pi/issues/678))
 

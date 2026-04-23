@@ -113,8 +113,23 @@ const CODEX_PROVIDER_SESSION_STATE_KEY = "openai-codex-responses";
 const X_CODEX_TURN_STATE_HEADER = "x-codex-turn-state";
 const X_MODELS_ETAG_HEADER = "x-models-etag";
 const X_REASONING_INCLUDED_HEADER = "x-reasoning-included";
-/** Connection-level websocket failures that should immediately fall back to SSE without retrying. */
-const CODEX_WEBSOCKET_FATAL_PATTERNS = ["websocket error:", "websocket closed before open", "connection timeout"];
+/**
+ * Connection-level websocket failures that should immediately disable the WS for the rest of
+ * the session.
+ *
+ * Notable omission: `"connection timeout"` is deliberately NOT fatal. Our setTimeout-based
+ * connect cap fires from the JS event loop, so a hot startup (MCP discovery + settings load +
+ * skills + prewarm + this request all fighting for the loop) can blow the 10s budget even
+ * though the underlying TCP/TLS/WS handshake finished in ~200ms. In that case the socket is
+ * fine; we just never dispatched the `open` event in time. Treating that as fatal permanently
+ * banished the entire session to SSE, which disabled the `previous_response_id` append
+ * optimization (continuation turns had to re-upload the full context). Timeouts now get a
+ * soft per-request fallback instead — see `openInitialCodexEventStream`.
+ */
+const CODEX_WEBSOCKET_FATAL_PATTERNS = ["websocket error:", "websocket closed before open"];
+
+/** Substrings that identify a connect-timeout — soft fallback, does not disable WS for the session. */
+const CODEX_WEBSOCKET_TIMEOUT_PATTERNS = ["connection timeout"];
 /** Max total time to spend retrying 429s with server-provided delays (5 minutes). */
 const CODEX_RATE_LIMIT_BUDGET_MS = 5 * 60 * 1000;
 
@@ -257,9 +272,14 @@ function createCodexWebSocketTransportError(message: string): Error {
 	return new Error(`${CODEX_WEBSOCKET_TRANSPORT_ERROR_PREFIX}: ${message}`);
 }
 
-function isCodexWebSocketFatalError(error: Error): boolean {
+export function isCodexWebSocketFatalError(error: Error): boolean {
 	const msg = error.message.toLowerCase();
 	return CODEX_WEBSOCKET_FATAL_PATTERNS.some(pattern => msg.includes(pattern.toLowerCase()));
+}
+
+export function isCodexWebSocketTimeoutError(error: Error): boolean {
+	const msg = error.message.toLowerCase();
+	return CODEX_WEBSOCKET_TIMEOUT_PATTERNS.some(pattern => msg.includes(pattern.toLowerCase()));
 }
 
 function isCodexWebSocketTransportError(error: unknown): boolean {
@@ -577,6 +597,18 @@ async function openInitialCodexEventStream(
 			} catch (error) {
 				const websocketError = error instanceof Error ? error : new Error(String(error));
 				const isFatal = isCodexWebSocketFatalError(websocketError);
+				const isTimeout = isCodexWebSocketTimeoutError(websocketError);
+				// Connect-timeout is usually event-loop contention at startup, not a real
+				// network failure. Fall back to SSE for THIS request but leave WS enabled
+				// so the next request can retry the handshake once the loop has drained.
+				if (isTimeout) {
+					recordCodexWebSocketFailure(websocketState, false);
+					logCodexDebug("codex websocket timeout (soft fallback)", {
+						error: websocketError.message,
+						retry: websocketRetries,
+					});
+					break;
+				}
 				const activateFallback = isFatal || websocketRetries >= websocketRetryBudget;
 				recordCodexWebSocketFailure(websocketState, activateFallback);
 				logCodexDebug("codex websocket fallback", {
