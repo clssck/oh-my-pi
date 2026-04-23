@@ -11,6 +11,8 @@ import type { Theme } from "../modes/theme/theme";
 import astEditDescription from "../prompts/tools/ast-edit.md" with { type: "text" };
 import { Ellipsis, Hasher, type RenderCache, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
+import type { ToolSession } from ".";
+import { createFileRecorder, formatResultPath } from "./file-recorder";
 import type { OutputMeta } from "./output-meta";
 import {
 	combineSearchGlobs,
@@ -32,7 +34,6 @@ import {
 import { queueResolveHandler } from "./resolve";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
-import type { ToolSession } from "./tool-session";
 
 const astEditOpSchema = Type.Object({
 	pat: Type.String({ description: "AST pattern to match" }),
@@ -41,7 +42,6 @@ const astEditOpSchema = Type.Object({
 
 const astEditSchema = Type.Object({
 	ops: Type.Array(astEditOpSchema, {
-		minItems: 1,
 		description: "Rewrite ops as [{ pat, out }]",
 	}),
 	lang: Type.Optional(Type.String({ description: "Language override" })),
@@ -164,24 +164,11 @@ export class AstEditTool implements AgentTool<typeof astEditSchema, AstEditToolD
 			});
 
 			const dedupedParseErrors = dedupeParseErrors(result.parseErrors);
-			const formatPath = (filePath: string): string => {
-				const cleanPath = filePath.startsWith("/") ? filePath.slice(1) : filePath;
-				if (isDirectory) {
-					return cleanPath.replace(/\\/g, "/");
-				}
-				return path.basename(cleanPath);
-			};
+			const formatPath = (filePath: string): string => formatResultPath(filePath, isDirectory);
 
-			const files = new Set<string>();
-			const fileList: string[] = [];
+			const { record: recordFile, list: fileList } = createFileRecorder();
 			const fileReplacementCounts = new Map<string, number>();
 			const changesByFile = new Map<string, AstReplaceChange[]>();
-			const recordFile = (relativePath: string) => {
-				if (!files.has(relativePath)) {
-					files.add(relativePath);
-					fileList.push(relativePath);
-				}
-			};
 			for (const fileChange of result.fileChanges) {
 				const relativePath = formatPath(fileChange.path);
 				recordFile(relativePath);

@@ -9,8 +9,8 @@ import type { Static, TSchema } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import Ajv, { type ErrorObject, type ValidateFunction } from "ajv";
 import { subprocessToolRegistry } from "../task/subprocess-tool-registry";
-import { jtdToJsonSchema } from "./jtd-to-json-schema";
-import type { ToolSession } from "./tool-session";
+import type { ToolSession } from ".";
+import { jtdToJsonSchema, normalizeSchema } from "./jtd-to-json-schema";
 
 export interface SubmitResultDetails {
 	data: unknown;
@@ -19,18 +19,6 @@ export interface SubmitResultDetails {
 }
 
 const ajv = new Ajv({ allErrors: true, strict: false, logger: false });
-
-function normalizeSchema(schema: unknown): { normalized?: unknown; error?: string } {
-	if (schema === undefined || schema === null) return {};
-	if (typeof schema === "string") {
-		try {
-			return { normalized: JSON.parse(schema) };
-		} catch (err) {
-			return { error: err instanceof Error ? err.message : String(err) };
-		}
-	}
-	return { normalized: schema };
-}
 
 function formatSchema(schema: unknown): string {
 	if (schema === undefined) return "No schema provided.";
