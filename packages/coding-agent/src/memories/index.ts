@@ -1124,8 +1124,22 @@ export function getMemoryRoot(agentDir: string, cwd: string): string {
 	return path.join(getMemoriesDir(agentDir), encodeProjectPath(findProjectAnchor(cwd)));
 }
 
+// Maximum length of the encoded project directory name. Most filesystems cap
+// per-component filename length at 255 bytes; 200 leaves margin for the `--`
+// wrapper and any future suffix without risk of ENAMETOOLONG when memory
+// files are written underneath this directory.
+const MAX_ENCODED_PROJECT_NAME_LEN = 200;
+
 function encodeProjectPath(cwd: string): string {
-	return `--${cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
+	const stripped = cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-");
+	const wrapped = `--${stripped}--`;
+	if (wrapped.length <= MAX_ENCODED_PROJECT_NAME_LEN) return wrapped;
+	// Encoded form would exceed the filesystem filename limit. Keep a readable
+	// prefix for debuggability and append a short hash of the original cwd for
+	// uniqueness so distinct long paths still get distinct memory directories.
+	const hash = Bun.hash(cwd).toString(36);
+	const budget = MAX_ENCODED_PROJECT_NAME_LEN - hash.length - 6; // "--" + "--" + "--"
+	return `--${stripped.slice(0, budget)}--${hash}--`;
 }
 
 function unixNow(): number {

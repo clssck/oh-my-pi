@@ -107,4 +107,26 @@ describe("derivePromptCacheKey", () => {
 		expect(b).toBe(a);
 		expect(c).toBe(a);
 	});
+
+	it("strips the alternate cwd/date tail emitted by custom-system-prompt.md so --custom-prompt users also get stable routing", () => {
+		// The custom-prompt template ends with a DIFFERENT tail format than the default one:
+		//
+		//     Current date: <date>
+		//     Current working directory: <cwd>
+		//
+		// Users supplying a custom system prompt must not silently regress to full-hash
+		// behavior and lose the midnight-stable routing key.
+		const head = "You are helpful.\nCustom user content goes here.";
+		const promptA = `${head}\nCurrent date: 2026-04-23\nCurrent working directory: /home/a/projX`;
+		const promptB = `${head}\nCurrent date: 2026-04-24\nCurrent working directory: /home/a/projX`;
+		const promptC = `${head}\nCurrent date: 2026-04-23\nCurrent working directory: /tmp/other`;
+
+		const a = derivePromptCacheKey("gpt-5.4", promptA, "s1");
+		const b = derivePromptCacheKey("gpt-5.4", promptB, "s2");
+		const c = derivePromptCacheKey("gpt-5.4", promptC, "s3");
+
+		expect(a).toMatch(/^omp-[0-9a-z]+$/);
+		expect(b).toBe(a);
+		expect(c).toBe(a);
+	});
 });

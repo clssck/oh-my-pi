@@ -27,33 +27,49 @@ import { normalizeResponsesToolCallId } from "../utils";
 import type { AssistantMessageEventStream } from "../utils/event-stream";
 import { parseStreamingJson } from "../utils/json-parse";
 
-// The system prompt template ends with two lines substituted at render time:
+// The system prompt templates end with one of two known volatile tails,
+// substituted at render time:
 //
-//     The current working directory is '{{cwd}}'.
-//     Today is '{{date}}'. Begin now.
+// 1. system-prompt.md (default)
 //
-// These substituted values are volatile (cwd varies per project, date rolls
-// every midnight) so including them in the hash input rotates the OpenAI
+//      The current working directory is '{{cwd}}'.
+//      Today is '{{date}}'. Begin now.
+//
+// 2. custom-system-prompt.md (when the caller supplies a --custom-prompt)
+//
+//      Current date: {{date}}
+//      Current working directory: {{cwd}}
+//
+// Both forms embed values that rotate (cwd varies per project, date rolls
+// every midnight), so including them in the hash input rotates the OpenAI
 // prompt_cache_key and scatters otherwise-identical prefixes across
-// different routing shards. Strip the tail before hashing.
+// routing shards. Strip whichever tail is present before hashing.
 //
 // A regex like `'[^']*'` would break on cwds that contain an apostrophe
 // (e.g. `/home/me/my's project`) — the closing `'` match would fire inside
 // the cwd value, the full tail regex would fail, and the user would silently
-// regress to the pre-fix behavior (key rotation on every date change).
-// Use position-based stripping via `lastIndexOf` on a stable marker so the
-// value contents never break the strip.
-const VOLATILE_TAIL_MARKER = "\nThe current working directory is '";
-const VOLATILE_TAIL_STRUCTURE = /'\.\nToday is '[\s\S]*'\.\s*Begin now\.\s*$/;
+// regress to pre-fix behavior. Use position-based stripping via `lastIndexOf`
+// on a stable marker so value contents never break the strip.
+const STANDARD_TAIL_MARKER = "\nThe current working directory is '";
+const STANDARD_TAIL_STRUCTURE = /'\.\nToday is '[\s\S]*'\.\s*Begin now\.\s*$/;
+
+const CUSTOM_TAIL_MARKER = "\nCurrent date: ";
+const CUSTOM_TAIL_STRUCTURE = /^[^\n]+\nCurrent working directory: [\s\S]*$/;
+
+function stripByMarker(systemPrompt: string, marker: string, structure: RegExp): string | null {
+	const idx = systemPrompt.lastIndexOf(marker);
+	if (idx < 0) return null;
+	const tail = systemPrompt.slice(idx + marker.length);
+	if (!structure.test(tail)) return null;
+	return systemPrompt.slice(0, idx);
+}
 
 function stripVolatileTail(systemPrompt: string): string {
-	const markerIdx = systemPrompt.lastIndexOf(VOLATILE_TAIL_MARKER);
-	if (markerIdx < 0) return systemPrompt;
-	const tail = systemPrompt.slice(markerIdx + VOLATILE_TAIL_MARKER.length);
-	// Validate the tail matches the expected structure before stripping so unrelated
-	// strings happening to contain the marker text do not get truncated.
-	if (!VOLATILE_TAIL_STRUCTURE.test(tail)) return systemPrompt;
-	return systemPrompt.slice(0, markerIdx);
+	return (
+		stripByMarker(systemPrompt, STANDARD_TAIL_MARKER, STANDARD_TAIL_STRUCTURE) ??
+		stripByMarker(systemPrompt, CUSTOM_TAIL_MARKER, CUSTOM_TAIL_STRUCTURE) ??
+		systemPrompt
+	);
 }
 
 /**

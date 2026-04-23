@@ -440,4 +440,31 @@ describe("getMemoryRoot project anchor", () => {
 		expect(getMemoryRoot(agentDir, symlinkPath)).toBe(getMemoryRoot(agentDir, realRepo));
 		expect(getMemoryRoot(agentDir, subdirLink)).toBe(getMemoryRoot(agentDir, subdirReal));
 	});
+
+	test("encodes very long cwd paths to a filesystem-safe length so mkdir does not ENAMETOOLONG", async () => {
+		const agentDir = await makeTempDir("memory-anchor-agent");
+		// Construct a cwd long enough that the raw encoded form would exceed the
+		// typical 255-byte filesystem filename limit.
+		const longSegment = "a".repeat(50);
+		const longCwd = `/tmp/${Array(8).fill(longSegment).join("/")}`;
+
+		const root = getMemoryRoot(agentDir, longCwd);
+		const encodedName = path.basename(root);
+		expect(encodedName.length).toBeLessThanOrEqual(255);
+
+		// And it must actually be writable — exercise the full filesystem path.
+		await fs.mkdir(root, { recursive: true });
+		await fs.writeFile(path.join(root, "memory_summary.md"), "probe");
+		await fs.rm(root, { recursive: true, force: true });
+	});
+
+	test("distinct long cwds hash-disambiguate to distinct encoded names", async () => {
+		const agentDir = await makeTempDir("memory-anchor-agent");
+		const base = `/tmp/${"a".repeat(50)}/${"b".repeat(50)}/${"c".repeat(50)}/${"d".repeat(50)}`;
+		const cwdA = `${base}/endA`;
+		const cwdB = `${base}/endB`;
+		// Both exceed the plain-encoding budget, so both take the hash-truncated
+		// branch. Distinct inputs must still produce distinct outputs.
+		expect(getMemoryRoot(agentDir, cwdA)).not.toBe(getMemoryRoot(agentDir, cwdB));
+	});
 });
