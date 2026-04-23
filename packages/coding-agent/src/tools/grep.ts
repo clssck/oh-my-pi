@@ -6,7 +6,6 @@ import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { prompt, untilAborted } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
-import { computeLineHash } from "../edit/line-hash";
 import { type ChunkedGrepMatch, describeChunkedGrepMatch } from "../edit/modes/chunk";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { getLanguageFromPath, type Theme } from "../modes/theme/theme";
@@ -15,6 +14,9 @@ import { DEFAULT_MAX_COLUMN, type TruncationResult, truncateHead } from "../sess
 import { Ellipsis, Hasher, type RenderCache, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
 import { resolveEditMode } from "../utils/edit-mode";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
+import type { ToolSession } from ".";
+import { createFileRecorder } from "./file-recorder";
+import { formatMatchLine } from "./match-line-format";
 import { formatFullOutputReference, type OutputMeta } from "./output-meta";
 import {
 	combineSearchGlobs,
@@ -27,20 +29,19 @@ import {
 import { formatCount, formatEmptyMessage, formatErrorMessage, PREVIEW_LIMITS } from "./render-utils";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
-import type { ToolSession } from "./tool-session";
 
 const grepSchema = Type.Object({
 	pattern: Type.String({ description: "Regex pattern to search for" }),
 	path: Type.Optional(Type.String({ description: "File or directory to search (default: cwd)" })),
 	glob: Type.Optional(Type.String({ description: "Filter files by glob pattern (e.g., '*.js')" })),
 	type: Type.Optional(Type.String({ description: "Filter by file type (e.g., js, py, rust)" })),
-	i: Type.Optional(Type.Boolean({ description: "Case-insensitive search", default: false })),
+	i: Type.Optional(Type.Boolean({ description: "Case-insensitive search (default: false)" })),
 	pre: Type.Optional(Type.Number({ description: "Lines of context before matches" })),
 	post: Type.Optional(Type.Number({ description: "Lines of context after matches" })),
 	multiline: Type.Optional(Type.Boolean({ description: "Enable multiline matching" })),
-	gitignore: Type.Optional(Type.Boolean({ description: "Respect .gitignore files during search", default: true })),
-	limit: Type.Optional(Type.Number({ description: "Limit output to first N matches", default: 20 })),
-	offset: Type.Optional(Type.Number({ description: "Skip first N entries before applying limit", default: 0 })),
+	gitignore: Type.Optional(Type.Boolean({ description: "Respect .gitignore files during search (default: true)" })),
+	limit: Type.Optional(Type.Number({ description: "Limit output to first N matches (default: 20)" })),
+	offset: Type.Optional(Type.Number({ description: "Skip first N entries before applying limit (default: 0)" })),
 });
 
 export type GrepToolInput = Static<typeof grepSchema>;
@@ -243,15 +244,8 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 				? roundRobinSelect(result.matches, effectiveLimit)
 				: result.matches.slice(0, effectiveLimit);
 			const matchLimitReached = result.matches.length > effectiveLimit;
-			const files = new Set<string>();
-			const fileList: string[] = [];
+			const { record: recordFile, list: fileList } = createFileRecorder();
 			const fileMatchCounts = new Map<string, number>();
-			const recordFile = (relativePath: string) => {
-				if (!files.has(relativePath)) {
-					files.add(relativePath);
-					fileList.push(relativePath);
-				}
-			};
 			if (selectedMatches.length === 0) {
 				const details: GrepToolDetails = {
 					scopePath,
@@ -401,15 +395,8 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 						}
 					}
 					const lineWidth = Math.max(...lineNumbers.map(value => value.toString().length));
-					const formatLine = (lineNumber: number, line: string, isMatch: boolean): string => {
-						const separator = isMatch ? ":" : "-";
-						if (useHashLines) {
-							const ref = `${lineNumber}#${computeLineHash(lineNumber, line)}`;
-							return `${ref}${separator}${line}`;
-						}
-						const padded = lineNumber.toString().padStart(lineWidth, " ");
-						return `${padded}${separator}${line}`;
-					};
+					const formatLine = (lineNumber: number, line: string, isMatch: boolean): string =>
+						formatMatchLine(lineNumber, line, isMatch, { useHashLines, lineWidth });
 					if (match.contextBefore) {
 						for (const ctx of match.contextBefore) {
 							outputLines.push(formatLine(ctx.lineNumber, ctx.line, false));

@@ -1,7 +1,6 @@
 /**
  * Edit tool renderer and LSP batching helpers.
  */
-import type { ToolCallContext } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text, visibleWidth, wrapTextWithAnsi } from "@oh-my-pi/pi-tui";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
@@ -16,6 +15,8 @@ import {
 	formatStatusIcon,
 	formatTitle,
 	getDiffStats,
+	getLspBatchRequest,
+	type LspBatchRequest,
 	PREVIEW_LIMITS,
 	replaceTabs,
 	shortenPath,
@@ -33,26 +34,7 @@ import type { Operation } from "./modes/patch";
 // LSP Batching
 // ═══════════════════════════════════════════════════════════════════════════
 
-const LSP_BATCH_TOOLS = new Set(["edit", "write"]);
-
-export interface LspBatchRequest {
-	id: string;
-	flush: boolean;
-}
-
-export function getLspBatchRequest(toolCall: ToolCallContext | undefined): LspBatchRequest | undefined {
-	if (!toolCall) {
-		return undefined;
-	}
-	const hasOtherWrites = toolCall.toolCalls.some(
-		(call, index) => index !== toolCall.index && LSP_BATCH_TOOLS.has(call.name),
-	);
-	if (!hasOtherWrites) {
-		return undefined;
-	}
-	const hasLaterWrites = toolCall.toolCalls.slice(toolCall.index + 1).some(call => LSP_BATCH_TOOLS.has(call.name));
-	return { id: toolCall.batchId, flush: !hasLaterWrites };
-}
+export { getLspBatchRequest, type LspBatchRequest };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Tool Details Types
@@ -439,7 +421,7 @@ export const editToolRenderer = {
 
 		// Extract path from first edit entry when top-level path is absent (new schema)
 		const firstEdit = Array.isArray(args.edits) && args.edits.length > 0 ? args.edits[0] : undefined;
-		const rawPath = args.file_path || args.path || (firstEdit as any)?.path || "";
+		const rawPath = args.file_path || args.path || filePathFromEditEntry((firstEdit as any)?.path) || "";
 		const rename = args.rename || (firstEdit as any)?.rename;
 		const op = args.op || (firstEdit as any)?.op;
 		const { description } = formatEditDescription(rawPath, uiTheme, { rename });
@@ -491,9 +473,15 @@ function renderSingleFileResult(
 ): Component {
 	const details = result.details;
 	const isError = result.isError ?? (details && "isError" in details ? details.isError : false);
-	const rawPath = args?.file_path || args?.path || (details && "path" in details ? details.path : "") || "";
-	const op = args?.op || details?.op;
-	const rename = args?.rename || details?.move;
+	const firstEdit = Array.isArray(args?.edits) && args!.edits.length > 0 ? args!.edits[0] : undefined;
+	const rawPath =
+		args?.file_path ||
+		args?.path ||
+		filePathFromEditEntry((firstEdit as any)?.path) ||
+		(details && "path" in details ? details.path : "") ||
+		"";
+	const op = args?.op || (firstEdit as any)?.op || details?.op;
+	const rename = args?.rename || (firstEdit as any)?.rename || details?.move;
 	const { language } = formatEditDescription(rawPath, uiTheme, { rename });
 
 	const metadataLine =
