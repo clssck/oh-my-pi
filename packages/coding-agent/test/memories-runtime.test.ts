@@ -379,3 +379,46 @@ describe("buildMemoryToolDeveloperInstructions", () => {
 		expect(payload).toContain("...[truncated]...");
 	});
 });
+
+describe("getMemoryRoot project anchor", () => {
+	afterEach(async () => {
+		for (const dir of createdDirs) {
+			await fs.rm(dir, { recursive: true, force: true });
+		}
+		createdDirs.clear();
+	});
+
+	test("subdir of a git repo resolves to the same memory root as the repo root", async () => {
+		const agentDir = await makeTempDir("memory-anchor-agent");
+		const repoRoot = await makeTempDir("memory-anchor-repo");
+		await fs.mkdir(path.join(repoRoot, ".git"));
+		const nestedSubdir = path.join(repoRoot, "packages", "ai", "src");
+		await fs.mkdir(nestedSubdir, { recursive: true });
+
+		const rootMemory = getMemoryRoot(agentDir, repoRoot);
+		const subdirMemory = getMemoryRoot(agentDir, nestedSubdir);
+
+		expect(subdirMemory).toBe(rootMemory);
+	});
+
+	test("detects .git when it is a file (worktree / submodule layout) not just a directory", async () => {
+		const agentDir = await makeTempDir("memory-anchor-agent");
+		const worktree = await makeTempDir("memory-anchor-worktree");
+		await fs.writeFile(path.join(worktree, ".git"), "gitdir: /elsewhere/.git/worktrees/x\n");
+		const subdir = path.join(worktree, "deep", "nested");
+		await fs.mkdir(subdir, { recursive: true });
+
+		expect(getMemoryRoot(agentDir, subdir)).toBe(getMemoryRoot(agentDir, worktree));
+	});
+
+	test("falls back to the literal cwd when no .git is found anywhere up the tree", async () => {
+		const agentDir = await makeTempDir("memory-anchor-agent");
+		const nonRepoA = await makeTempDir("memory-anchor-nonrepo-a");
+		const nonRepoB = await makeTempDir("memory-anchor-nonrepo-b");
+
+		// Without a project marker, distinct cwds must keep distinct memory spaces.
+		// (Otherwise unrelated tmp/working dirs would silently collide on the same
+		// shared memory at $TMPDIR or /, polluting one project with another's notes.)
+		expect(getMemoryRoot(agentDir, nonRepoA)).not.toBe(getMemoryRoot(agentDir, nonRepoB));
+	});
+});

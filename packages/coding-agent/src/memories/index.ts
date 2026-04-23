@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type * as fsNode from "node:fs";
+import * as fsNode from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
@@ -1086,8 +1086,31 @@ function loadMemoryConfig(settings: Settings): MemoryRuntimeConfig {
 	};
 }
 
+/**
+ * Resolve the canonical project anchor for memory scoping by walking up from
+ * `cwd` to the nearest `.git` (file or directory — submodules and worktrees use
+ * a file). Returns the anchor directory, or the literal (resolved) `cwd` when
+ * no `.git` is found along the walk.
+ *
+ * Memory is keyed by anchor rather than raw `cwd` so every subdir of the same
+ * checkout shares one memory space. Without this anchor, running omp from a
+ * subdir loses project memory and fragments the system-prompt cache across
+ * cwd variations (the memory summary block is pre-inlined into the prompt,
+ * and its presence/absence changes the prefix bytes and the cache route).
+ */
+function findProjectAnchor(cwd: string): string {
+	const absolute = path.resolve(cwd);
+	let dir = absolute;
+	while (true) {
+		if (fsNode.existsSync(path.join(dir, ".git"))) return dir;
+		const parent = path.dirname(dir);
+		if (parent === dir) return absolute;
+		dir = parent;
+	}
+}
+
 export function getMemoryRoot(agentDir: string, cwd: string): string {
-	return path.join(getMemoriesDir(agentDir), encodeProjectPath(cwd));
+	return path.join(getMemoriesDir(agentDir), encodeProjectPath(findProjectAnchor(cwd)));
 }
 
 function encodeProjectPath(cwd: string): string {
