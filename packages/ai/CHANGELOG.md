@@ -6,6 +6,8 @@
 
 - Added `isCopilotTransientModelError()` and `callWithCopilotModelRetry()` helpers in `utils/retry` that detect GitHub Copilot's intermittent `HTTP 400 model_not_supported` responses for preview models (`gpt-5.3-codex`, `gpt-5.4`, `gpt-5.4-mini`, ...) and retry the request up to three times with backoff. OpenAI Responses, OpenAI Completions, and Anthropic provider paths now participate in this retry when the model is served through Copilot.
 
+- Added opt-in `PI_CODEX_PROMPT_CACHE_RETENTION` env flag (`24h` or `in_memory`) that forwards `prompt_cache_retention` on the OpenAI Codex Responses body. Default is unset so the field stays stripped, because the Codex subscription backend currently rejects the parameter ("Unsupported parameter: prompt_cache_retention" / `invalid_request_error`; see [openai/codex#17815](https://github.com/openai/codex/issues/17815), rolled back 2026-04-14; re-enable tracked in [openai/codex#18130](https://github.com/openai/codex/issues/18130)). Direct OpenAI Responses continues to set `prompt_cache_retention: "24h"` separately when pointed at `api.openai.com`, which already honors it.
+
 ### Changed
 
 - Renamed `rewriteCopilotAuthError` to `rewriteCopilotError` and extended it to rewrite `HTTP 400 model_not_supported` after retries are exhausted with guidance about Copilot's OAuth-client-specific rollout gap (see opencode#13313).
