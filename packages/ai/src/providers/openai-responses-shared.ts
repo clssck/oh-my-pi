@@ -51,10 +51,20 @@ import { parseStreamingJson } from "../utils/json-parse";
 // regress to pre-fix behavior. Use position-based stripping via `lastIndexOf`
 // on a stable marker so value contents never break the strip.
 const STANDARD_TAIL_MARKER = "\nThe current working directory is '";
-const STANDARD_TAIL_STRUCTURE = /'\.\r?\nToday is '[\s\S]*'\.\s*Begin now\.\s*$/;
+// Relaxed from `...\s*$` to tolerate trailing content. When a caller composes
+// the default prompt with `--append-system-prompt <text>`, the resulting string
+// has the tail in the middle, not at end-of-string. Under the prior strict
+// anchor the structure regex rejected those compositions and the split fell
+// through, silently regressing those users to the pre-cache-split behaviour.
+// The lazy middle quantifier (`*?`) keeps matching deterministic and prevents
+// pathological backtracking on long inputs.
+const STANDARD_TAIL_STRUCTURE = /'\.\r?\nToday is '[\s\S]*?'\.\s*Begin now\./;
 
 const CUSTOM_TAIL_MARKER = "\nCurrent date: ";
-const CUSTOM_TAIL_STRUCTURE = /^[^\r\n]+\r?\nCurrent working directory: [\s\S]*$/;
+// Relaxed symmetrically for the custom-prompt composition. We still require
+// the tail to begin with a single-line date value followed by the working
+// directory marker; anything after is treated as post-tail content.
+const CUSTOM_TAIL_STRUCTURE = /^[^\r\n]+\r?\nCurrent working directory: /;
 
 function stripByMarker(systemPrompt: string, marker: string, structure: RegExp): string | null {
 	const idx = systemPrompt.lastIndexOf(marker);
@@ -72,6 +82,14 @@ function stripByMarker(systemPrompt: string, marker: string, structure: RegExp):
  * prefix; callers that cache the *content* (Anthropic) need both parts as
  * separate blocks so the tail's per-day/per-cwd churn doesn't invalidate the
  * stable prefix's cache breakpoint.
+ *
+ * The structure regexes are anchored at tail-start but not tail-end, so a
+ * composed prompt like `${defaultPrompt}\n\n${appendPrompt}` (produced by
+ * `--append-system-prompt` without an explicit `--system-prompt`) still
+ * splits correctly: the stable prefix is everything before the tail marker,
+ * and the returned `tail` carries the cwd+date lines plus the trailing
+ * append content. The model-visible bytes are preserved — `stable + tail`
+ * is always byte-identical to the input.
  *
  * Returns `tail === ""` when no known tail is present, so callers can treat a
  * non-empty `tail` as the signal to split.
