@@ -27,6 +27,32 @@ import { normalizeResponsesToolCallId } from "../utils";
 import type { AssistantMessageEventStream } from "../utils/event-stream";
 import { parseStreamingJson } from "../utils/json-parse";
 
+/**
+ * Derive a stable prompt_cache_key for OpenAI-style Responses endpoints.
+ *
+ * Prior to this helper each caller passed `options?.sessionId` — a UUIDv7
+ * generated fresh per OMP session — which meant every new session was cold
+ * against OpenAI's / Azure's / Codex's prompt cache router. Hashing
+ * `(modelId, systemPrompt)` collapses distinct sessionIds onto one cache
+ * route per `(model, systemPrompt)` tuple. Repeat fresh sessions with the
+ * same system prompt share a cache slot and hit on turn 1.
+ *
+ * Opt-outs:
+ * - `sessionId === undefined` returns `undefined` so callers that want no
+ *   cache routing (the pre-existing test contract) keep that behavior.
+ * - Empty `systemPrompt` returns `sessionId` verbatim so callers that pass
+ *   a sessionId without a system prompt still get a routing value.
+ */
+export function derivePromptCacheKey(
+	modelId: string,
+	systemPrompt: string | undefined,
+	sessionId: string | undefined,
+): string | undefined {
+	if (!sessionId) return undefined;
+	if (!systemPrompt) return sessionId;
+	return `omp-${Bun.hash(`${modelId}\u0000${systemPrompt}`).toString(36)}`;
+}
+
 export function encodeTextSignatureV1(id: string, phase?: TextSignatureV1["phase"]): string {
 	const payload: TextSignatureV1 = { v: 1, id };
 	if (phase) payload.phase = phase;

@@ -11,6 +11,8 @@
 - Renamed `rewriteCopilotAuthError` to `rewriteCopilotError` and extended it to rewrite `HTTP 400 model_not_supported` after retries are exhausted with guidance about Copilot's OAuth-client-specific rollout gap (see opencode#13313).
 
 - Stabilized OpenAI Codex Responses cache routing so fresh OMP sessions with the same system prompt share a Codex cache route. The `prompt_cache_key` body field and the `conversation_id` / `session_id` HTTP headers are now derived from `(model.id, systemPrompt)` instead of the per-session random UUIDv7. Repeat runs with the same prefix now hit the Codex KV cache on turn 1 (measured: ~28.6k input tokens moved from `input` to `cacheRead` on `gpt-5.4` with the default OMP system prompt). Within-session stickiness is preserved because the system prompt is stable across turns. Callers that leave `options.sessionId` undefined still get no cache routing (existing opt-out preserved). The websocket private/public session keys continue to use `options.sessionId` for connection multiplexing.
+
+- Extracted the cache-routing hash into a shared `derivePromptCacheKey` helper in `openai-responses-shared.ts` and applied the same `(model.id, systemPrompt)` routing to the direct OpenAI Responses (`openai-responses.ts`) and Azure OpenAI Responses (`azure-openai-responses.ts`) providers. Direct-API and Azure callers now get the same cross-session prompt cache stickiness that Codex callers got in the prior change. The `cacheRetention: "none"` opt-out on direct OpenAI Responses still bypasses cache routing entirely. The `session_id` and `x-client-request-id` HTTP headers on direct OpenAI Responses now carry the derived value (matching the body's `prompt_cache_key`) instead of the literal sessionId.
 ## [14.1.3] - 2026-04-17
 
 ### Fixed

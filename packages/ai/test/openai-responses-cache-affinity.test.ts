@@ -83,7 +83,13 @@ describe("openai-responses cache affinity", () => {
 	it("sets session routing headers for official OpenAI Responses requests with a sessionId", async () => {
 		const captured = await captureOpenAIResponseHeaders({ sessionId: "session-123" });
 
-		expect(captured).toEqual({ sessionId: "session-123", clientRequestId: "session-123" });
+		// Routing headers carry the (model, systemPrompt) derived cache key — not the
+		// literal sessionId — so repeat fresh sessions with the same prefix share a
+		// cache slot. The coupling between session_id and x-client-request-id is
+		// preserved.
+		const expectedKey = `omp-${Bun.hash(`${model.id}\u0000sys`).toString(36)}`;
+		expect(captured).toEqual({ sessionId: expectedKey, clientRequestId: expectedKey });
+		expect(expectedKey).not.toBe("session-123");
 	});
 
 	it("lets explicit headers override the default OpenAI session routing headers", async () => {

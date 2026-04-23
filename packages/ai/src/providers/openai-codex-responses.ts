@@ -55,7 +55,12 @@ import {
 	transformRequestBody,
 } from "./openai-codex/request-transformer";
 import { parseCodexError } from "./openai-codex/response-handler";
-import { encodeTextSignatureV1, mapOpenAIResponsesStopReason, parseTextSignature } from "./openai-responses-shared";
+import {
+	derivePromptCacheKey,
+	encodeTextSignatureV1,
+	mapOpenAIResponsesStopReason,
+	parseTextSignature,
+} from "./openai-responses-shared";
 import { transformMessages } from "./transform-messages";
 
 export interface OpenAICodexResponsesOptions extends StreamOptions {
@@ -461,38 +466,6 @@ async function buildCodexRequestContext(
 	};
 }
 
-/**
- * Derive a stable prompt_cache_key for OpenAI Codex Responses.
- *
- * Before this helper the key was `options?.sessionId`, a fresh UUIDv7 per OMP
- * session. That meant every new session started cold against Codex's cache
- * router. Hashing `(model, systemPrompt)` produces the same value for every
- * session that shares the same cached prefix, so repeat runs share a cache
- * route and hit the KV cache on turn 1. Within-session stickiness is
- * preserved because the system prompt does not change across turns.
- *
- * This value is used as the body field `prompt_cache_key` AND as the
- * `conversation_id` / `session_id` HTTP headers (the Codex cache router keys
- * off the headers). The websocket private/public session keys
- * (getCodexWebSocketSessionKey / getCodexPublicSessionKey) continue to use
- * `options.sessionId` because those handle connection multiplexing, not
- * cache routing.
- *
- * Preserves the pre-existing opt-out: callers that leave `options.sessionId`
- * undefined still get no cache routing (existing test contract).
- */
-function derivePromptCacheKey(
-	model: Model<"openai-codex-responses">,
-	context: Context,
-	options: Pick<OpenAICodexResponsesOptions, "sessionId"> | undefined,
-): string | undefined {
-	const explicit = options?.sessionId;
-	if (!explicit) return undefined;
-	const systemPrompt = context.systemPrompt;
-	if (!systemPrompt) return explicit;
-	return `omp-${Bun.hash(`${model.id}\u0000${systemPrompt}`).toString(36)}`;
-}
-
 async function buildTransformedCodexRequestBody(
 	model: Model<"openai-codex-responses">,
 	context: Context,
@@ -502,7 +475,7 @@ async function buildTransformedCodexRequestBody(
 		model: model.id,
 		input: [...convertMessages(model, context)],
 		stream: true,
-		prompt_cache_key: derivePromptCacheKey(model, context, options),
+		prompt_cache_key: derivePromptCacheKey(model.id, context.systemPrompt, options?.sessionId),
 	};
 
 	if (options?.maxTokens) {
