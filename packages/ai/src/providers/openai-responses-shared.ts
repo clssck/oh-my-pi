@@ -27,12 +27,34 @@ import { normalizeResponsesToolCallId } from "../utils";
 import type { AssistantMessageEventStream } from "../utils/event-stream";
 import { parseStreamingJson } from "../utils/json-parse";
 
-// Matches the volatile tail substituted into the system prompt template at
-// render time (`{{cwd}}` + `{{date}}` in system-prompt.md). Stripping this
-// tail before hashing keeps the prompt_cache_key stable across midnight and
-// cwd switches so the cache route does not rotate while the content prefix
-// is still identical.
-const VOLATILE_CWD_DATE_TAIL = /\n*The current working directory is '[^']*'\.\nToday is '[^']*'\.\s*Begin now\.\s*$/;
+// The system prompt template ends with two lines substituted at render time:
+//
+//     The current working directory is '{{cwd}}'.
+//     Today is '{{date}}'. Begin now.
+//
+// These substituted values are volatile (cwd varies per project, date rolls
+// every midnight) so including them in the hash input rotates the OpenAI
+// prompt_cache_key and scatters otherwise-identical prefixes across
+// different routing shards. Strip the tail before hashing.
+//
+// A regex like `'[^']*'` would break on cwds that contain an apostrophe
+// (e.g. `/home/me/my's project`) — the closing `'` match would fire inside
+// the cwd value, the full tail regex would fail, and the user would silently
+// regress to the pre-fix behavior (key rotation on every date change).
+// Use position-based stripping via `lastIndexOf` on a stable marker so the
+// value contents never break the strip.
+const VOLATILE_TAIL_MARKER = "\nThe current working directory is '";
+const VOLATILE_TAIL_STRUCTURE = /'\.\nToday is '[\s\S]*'\.\s*Begin now\.\s*$/;
+
+function stripVolatileTail(systemPrompt: string): string {
+	const markerIdx = systemPrompt.lastIndexOf(VOLATILE_TAIL_MARKER);
+	if (markerIdx < 0) return systemPrompt;
+	const tail = systemPrompt.slice(markerIdx + VOLATILE_TAIL_MARKER.length);
+	// Validate the tail matches the expected structure before stripping so unrelated
+	// strings happening to contain the marker text do not get truncated.
+	if (!VOLATILE_TAIL_STRUCTURE.test(tail)) return systemPrompt;
+	return systemPrompt.slice(0, markerIdx);
+}
 
 /**
  * Derive a stable prompt_cache_key for OpenAI-style Responses endpoints.
@@ -64,7 +86,7 @@ export function derivePromptCacheKey(
 ): string | undefined {
 	if (!sessionId) return undefined;
 	if (!systemPrompt) return sessionId;
-	const stable = systemPrompt.replace(VOLATILE_CWD_DATE_TAIL, "");
+	const stable = stripVolatileTail(systemPrompt);
 	return `omp-${Bun.hash(`${modelId}\u0000${stable}`).toString(36)}`;
 }
 

@@ -1097,9 +1097,20 @@ function loadMemoryConfig(settings: Settings): MemoryRuntimeConfig {
  * subdir loses project memory and fragments the system-prompt cache across
  * cwd variations (the memory summary block is pre-inlined into the prompt,
  * and its presence/absence changes the prefix bytes and the cache route).
+ *
+ * The input `cwd` is canonicalized through `fs.realpathSync` first so users
+ * who access a checkout via a symlink (e.g. `/work/repo` -> the real path)
+ * land on the same anchor as direct access. If realpath fails (e.g. the path
+ * does not exist or permission is denied) fall back to `path.resolve` so the
+ * walk still produces a deterministic result.
  */
 function findProjectAnchor(cwd: string): string {
-	const absolute = path.resolve(cwd);
+	let absolute: string;
+	try {
+		absolute = fsNode.realpathSync(cwd);
+	} catch {
+		absolute = path.resolve(cwd);
+	}
 	let dir = absolute;
 	while (true) {
 		if (fsNode.existsSync(path.join(dir, ".git"))) return dir;

@@ -89,4 +89,22 @@ describe("derivePromptCacheKey", () => {
 		const key = derivePromptCacheKey("gpt-5.4", promptPartial, "session-Y");
 		expect(key).toBe(`omp-${Bun.hash(`gpt-5.4\u0000${promptPartial}`).toString(36)}`);
 	});
+
+	it("stabilizes the key even when the cwd value contains an apostrophe (regex-on-value regression)", () => {
+		// Earlier fix used `[^']*` for the cwd slot which broke on cwds like `/home/me/my's project`.
+		// The marker + structure approach must still strip the tail in this case, otherwise users with
+		// apostrophes in their path silently lose the midnight-stable routing key.
+		const head = "You are helpful.";
+		const apostCwd = `${head}\nThe current working directory is '/home/me/my's project'.\nToday is '2026-04-23'. Begin now.`;
+		const normalCwd = `${head}\nThe current working directory is '/home/me/plain-dir'.\nToday is '2026-04-23'. Begin now.`;
+		const apostTomorrow = `${head}\nThe current working directory is '/home/me/my's project'.\nToday is '2026-04-24'. Begin now.`;
+
+		const a = derivePromptCacheKey("gpt-5.4", apostCwd, "s1");
+		const b = derivePromptCacheKey("gpt-5.4", normalCwd, "s2");
+		const c = derivePromptCacheKey("gpt-5.4", apostTomorrow, "s3");
+
+		expect(a).toMatch(/^omp-[0-9a-z]+$/);
+		expect(b).toBe(a);
+		expect(c).toBe(a);
+	});
 });

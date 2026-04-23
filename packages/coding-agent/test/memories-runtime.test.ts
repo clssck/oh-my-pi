@@ -421,4 +421,23 @@ describe("getMemoryRoot project anchor", () => {
 		// shared memory at $TMPDIR or /, polluting one project with another's notes.)
 		expect(getMemoryRoot(agentDir, nonRepoA)).not.toBe(getMemoryRoot(agentDir, nonRepoB));
 	});
+
+	test("follows symlinks so accessing a checkout via a symlinked path yields the same anchor as direct access", async () => {
+		const agentDir = await makeTempDir("memory-anchor-agent");
+		const realRepo = await makeTempDir("memory-anchor-real");
+		await fs.mkdir(path.join(realRepo, ".git"));
+		const subdirReal = path.join(realRepo, "src");
+		await fs.mkdir(subdirReal, { recursive: true });
+
+		// Place a symlink in a sibling location that points at the real repo. Users often have
+		// `/work/myrepo` -> `/home/u/projects/myrepo`; direct and symlinked access must land on
+		// the same memory, otherwise the anchor fix regresses for anyone using symlinked paths.
+		const symlinkDir = await makeTempDir("memory-anchor-link-parent");
+		const symlinkPath = path.join(symlinkDir, "linked-repo");
+		await fs.symlink(realRepo, symlinkPath);
+		const subdirLink = path.join(symlinkPath, "src");
+
+		expect(getMemoryRoot(agentDir, symlinkPath)).toBe(getMemoryRoot(agentDir, realRepo));
+		expect(getMemoryRoot(agentDir, subdirLink)).toBe(getMemoryRoot(agentDir, subdirReal));
+	});
 });
