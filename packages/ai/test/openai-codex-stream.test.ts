@@ -447,13 +447,15 @@ describe("openai-codex streaming", () => {
 			}
 			if (url === "https://chatgpt.com/backend-api/codex/responses") {
 				const headers = init?.headers instanceof Headers ? init.headers : undefined;
-				// Verify sessionId is set in headers
-				expect(headers?.get("conversation_id")).toBe(sessionId);
-				expect(headers?.get("session_id")).toBe(sessionId);
+				// Cache-routing value is derived from (model.id, systemPrompt) so
+				// repeat runs with the same prefix share a Codex cache route.
+				// All three values (body field + two headers) stay coupled.
+				const expectedCacheKey = `omp-${Bun.hash(`gpt-5.1-codex\u0000You are a helpful assistant.`).toString(36)}`;
+				expect(headers?.get("conversation_id")).toBe(expectedCacheKey);
+				expect(headers?.get("session_id")).toBe(expectedCacheKey);
 
-				// Verify sessionId is set in request body as prompt_cache_key
 				const body = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : null;
-				expect(body?.prompt_cache_key).toBe(sessionId);
+				expect(body?.prompt_cache_key).toBe(expectedCacheKey);
 
 				return new Response(stream, {
 					status: 200,
@@ -485,6 +487,457 @@ describe("openai-codex streaming", () => {
 
 		const streamResult = streamOpenAICodexResponses(model, context, { apiKey: token, sessionId });
 		await streamResult.result();
+	});
+
+	it("keeps the cache-routing value stable across different sessionIds with the same systemPrompt", async () => {
+		const tempDir = TempDir.createSync("@pi-codex-stream-");
+		setAgentDir(tempDir.path());
+
+		const payload = Buffer.from(
+			JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "acc_test" } }),
+			"utf8",
+		).toBase64();
+		const token = `aaa.${payload}.bbb`;
+
+		const sse = `${[
+			`data: ${JSON.stringify({
+				type: "response.output_item.added",
+				item: { type: "message", id: "msg_1", role: "assistant", status: "in_progress", content: [] },
+			})}`,
+			`data: ${JSON.stringify({ type: "response.content_part.added", part: { type: "output_text", text: "" } })}`,
+			`data: ${JSON.stringify({ type: "response.output_text.delta", delta: "ok" })}`,
+			`data: ${JSON.stringify({
+				type: "response.output_item.done",
+				item: {
+					type: "message",
+					id: "msg_1",
+					role: "assistant",
+					status: "completed",
+					content: [{ type: "output_text", text: "ok" }],
+				},
+			})}`,
+			`data: ${JSON.stringify({
+				type: "response.completed",
+				response: {
+					status: "completed",
+					usage: {
+						input_tokens: 5,
+						output_tokens: 3,
+						total_tokens: 8,
+						input_tokens_details: { cached_tokens: 0 },
+					},
+				},
+			})}`,
+		].join("\n\n")}\n\n`;
+
+		const buildStream = () => {
+			const encoder = new TextEncoder();
+			return new ReadableStream({
+				start(controller) {
+					controller.enqueue(encoder.encode(sse));
+					controller.close();
+				},
+			});
+		};
+
+		const captured: Array<{ headerKey: string | null; bodyKey: string | null }> = [];
+		const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+			const url = typeof input === "string" ? input : input.toString();
+			if (url === "https://api.github.com/repos/openai/codex/releases/latest") {
+				return new Response(JSON.stringify({ tag_name: "rust-v0.0.0" }), { status: 200 });
+			}
+			if (url.startsWith("https://raw.githubusercontent.com/openai/codex/")) {
+				return new Response("PROMPT", { status: 200, headers: { etag: '"etag"' } });
+			}
+			if (url === "https://chatgpt.com/backend-api/codex/responses") {
+				const headers = init?.headers instanceof Headers ? init.headers : undefined;
+				const body = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : null;
+				captured.push({
+					headerKey: headers?.get("session_id") ?? null,
+					bodyKey: (body?.prompt_cache_key as string | undefined) ?? null,
+				});
+				return new Response(buildStream(), {
+					status: 200,
+					headers: { "content-type": "text/event-stream" },
+				});
+			}
+			return new Response("not found", { status: 404 });
+		});
+
+		global.fetch = fetchMock as unknown as typeof fetch;
+
+		const model: Model<"openai-codex-responses"> = {
+			id: "gpt-5.1-codex",
+			name: "GPT-5.1 Codex",
+			api: "openai-codex-responses",
+			provider: "openai-codex",
+			baseUrl: "https://chatgpt.com/backend-api",
+			reasoning: true,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 400000,
+			maxTokens: 128000,
+		};
+
+		const context: Context = {
+			systemPrompt: "You are a helpful assistant.",
+			messages: [{ role: "user", content: "Say hello", timestamp: Date.now() }],
+		};
+
+		await streamOpenAICodexResponses(model, context, { apiKey: token, sessionId: "session-A" }).result();
+		await streamOpenAICodexResponses(model, context, { apiKey: token, sessionId: "session-B" }).result();
+
+		expect(captured).toHaveLength(2);
+		expect(captured[0].headerKey).toBe(captured[1].headerKey);
+		expect(captured[0].bodyKey).toBe(captured[1].bodyKey);
+		expect(captured[0].headerKey).toBe(captured[0].bodyKey);
+		expect(captured[0].headerKey).toMatch(/^omp-[0-9a-z]+$/);
+	});
+
+	it("derives distinct cache keys for different models sharing sessionId and systemPrompt", async () => {
+		const tempDir = TempDir.createSync("@pi-codex-stream-");
+		setAgentDir(tempDir.path());
+
+		const payload = Buffer.from(
+			JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "acc_test" } }),
+			"utf8",
+		).toBase64();
+		const token = `aaa.${payload}.bbb`;
+
+		const sse = `${[
+			`data: ${JSON.stringify({
+				type: "response.output_item.added",
+				item: { type: "message", id: "msg_1", role: "assistant", status: "in_progress", content: [] },
+			})}`,
+			`data: ${JSON.stringify({ type: "response.content_part.added", part: { type: "output_text", text: "" } })}`,
+			`data: ${JSON.stringify({ type: "response.output_text.delta", delta: "ok" })}`,
+			`data: ${JSON.stringify({
+				type: "response.output_item.done",
+				item: {
+					type: "message",
+					id: "msg_1",
+					role: "assistant",
+					status: "completed",
+					content: [{ type: "output_text", text: "ok" }],
+				},
+			})}`,
+			`data: ${JSON.stringify({
+				type: "response.completed",
+				response: {
+					status: "completed",
+					usage: {
+						input_tokens: 5,
+						output_tokens: 3,
+						total_tokens: 8,
+						input_tokens_details: { cached_tokens: 0 },
+					},
+				},
+			})}`,
+		].join("\n\n")}\n\n`;
+
+		const buildStream = () => {
+			const encoder = new TextEncoder();
+			return new ReadableStream({
+				start(controller) {
+					controller.enqueue(encoder.encode(sse));
+					controller.close();
+				},
+			});
+		};
+
+		const captured: Array<{ headerKey: string | null; bodyKey: string | null }> = [];
+		const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+			const url = typeof input === "string" ? input : input.toString();
+			if (url === "https://api.github.com/repos/openai/codex/releases/latest") {
+				return new Response(JSON.stringify({ tag_name: "rust-v0.0.0" }), { status: 200 });
+			}
+			if (url.startsWith("https://raw.githubusercontent.com/openai/codex/")) {
+				return new Response("PROMPT", { status: 200, headers: { etag: '"etag"' } });
+			}
+			if (url === "https://chatgpt.com/backend-api/codex/responses") {
+				const headers = init?.headers instanceof Headers ? init.headers : undefined;
+				const body = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : null;
+				captured.push({
+					headerKey: headers?.get("session_id") ?? null,
+					bodyKey: (body?.prompt_cache_key as string | undefined) ?? null,
+				});
+				return new Response(buildStream(), {
+					status: 200,
+					headers: { "content-type": "text/event-stream" },
+				});
+			}
+			return new Response("not found", { status: 404 });
+		});
+
+		global.fetch = fetchMock as unknown as typeof fetch;
+
+		const baseModel: Model<"openai-codex-responses"> = {
+			id: "gpt-5.1-codex",
+			name: "GPT-5.1 Codex",
+			api: "openai-codex-responses",
+			provider: "openai-codex",
+			baseUrl: "https://chatgpt.com/backend-api",
+			reasoning: true,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 400000,
+			maxTokens: 128000,
+		};
+		const modelB: Model<"openai-codex-responses"> = { ...baseModel, id: "gpt-5.3-codex-spark" };
+
+		const context: Context = {
+			systemPrompt: "You are a helpful assistant.",
+			messages: [{ role: "user", content: "Say hello", timestamp: Date.now() }],
+		};
+
+		await streamOpenAICodexResponses(baseModel, context, { apiKey: token, sessionId: "shared-session" }).result();
+		await streamOpenAICodexResponses(modelB, context, { apiKey: token, sessionId: "shared-session" }).result();
+
+		const expectedA = `omp-${Bun.hash(`gpt-5.1-codex\u0000You are a helpful assistant.`).toString(36)}`;
+		const expectedB = `omp-${Bun.hash(`gpt-5.3-codex-spark\u0000You are a helpful assistant.`).toString(36)}`;
+
+		expect(captured).toHaveLength(2);
+		expect(captured[0].headerKey).toBe(expectedA);
+		expect(captured[0].bodyKey).toBe(expectedA);
+		expect(captured[1].headerKey).toBe(expectedB);
+		expect(captured[1].bodyKey).toBe(expectedB);
+		expect(expectedA).not.toBe(expectedB);
+	});
+
+	it("uses the literal sessionId as the cache-routing value when the context has no systemPrompt", async () => {
+		const tempDir = TempDir.createSync("@pi-codex-stream-");
+		setAgentDir(tempDir.path());
+
+		const payload = Buffer.from(
+			JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "acc_test" } }),
+			"utf8",
+		).toBase64();
+		const token = `aaa.${payload}.bbb`;
+
+		const sse = `${[
+			`data: ${JSON.stringify({
+				type: "response.output_item.added",
+				item: { type: "message", id: "msg_1", role: "assistant", status: "in_progress", content: [] },
+			})}`,
+			`data: ${JSON.stringify({ type: "response.content_part.added", part: { type: "output_text", text: "" } })}`,
+			`data: ${JSON.stringify({ type: "response.output_text.delta", delta: "ok" })}`,
+			`data: ${JSON.stringify({
+				type: "response.output_item.done",
+				item: {
+					type: "message",
+					id: "msg_1",
+					role: "assistant",
+					status: "completed",
+					content: [{ type: "output_text", text: "ok" }],
+				},
+			})}`,
+			`data: ${JSON.stringify({
+				type: "response.completed",
+				response: {
+					status: "completed",
+					usage: {
+						input_tokens: 5,
+						output_tokens: 3,
+						total_tokens: 8,
+						input_tokens_details: { cached_tokens: 0 },
+					},
+				},
+			})}`,
+		].join("\n\n")}\n\n`;
+
+		const literalSessionId = "literal-session-xyz";
+		const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+			const url = typeof input === "string" ? input : input.toString();
+			if (url === "https://api.github.com/repos/openai/codex/releases/latest") {
+				return new Response(JSON.stringify({ tag_name: "rust-v0.0.0" }), { status: 200 });
+			}
+			if (url.startsWith("https://raw.githubusercontent.com/openai/codex/")) {
+				return new Response("PROMPT", { status: 200, headers: { etag: '"etag"' } });
+			}
+			if (url === "https://chatgpt.com/backend-api/codex/responses") {
+				const headers = init?.headers instanceof Headers ? init.headers : undefined;
+				const body = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : null;
+				// No systemPrompt -> helper falls back to the literal sessionId verbatim.
+				expect(headers?.get("conversation_id")).toBe(literalSessionId);
+				expect(headers?.get("session_id")).toBe(literalSessionId);
+				expect(body?.prompt_cache_key).toBe(literalSessionId);
+
+				return new Response(sse, {
+					status: 200,
+					headers: { "content-type": "text/event-stream" },
+				});
+			}
+			return new Response("not found", { status: 404 });
+		});
+
+		global.fetch = fetchMock as unknown as typeof fetch;
+
+		const model: Model<"openai-codex-responses"> = {
+			id: "gpt-5.1-codex",
+			name: "GPT-5.1 Codex",
+			api: "openai-codex-responses",
+			provider: "openai-codex",
+			baseUrl: "https://chatgpt.com/backend-api",
+			reasoning: true,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 400000,
+			maxTokens: 128000,
+		};
+
+		const context: Context = {
+			messages: [{ role: "user", content: "Say hello", timestamp: Date.now() }],
+		};
+
+		await streamOpenAICodexResponses(model, context, { apiKey: token, sessionId: literalSessionId }).result();
+		expect(fetchMock).toHaveBeenCalled();
+	});
+
+	it("carries the content-derived cache key in websocket conversation_id/session_id headers", async () => {
+		const tempDir = TempDir.createSync("@pi-codex-stream-");
+		setAgentDir(tempDir.path());
+
+		const payload = Buffer.from(
+			JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "acc_test" } }),
+			"utf8",
+		).toBase64();
+		const token = `aaa.${payload}.bbb`;
+
+		const fetchMock = vi.fn(async (input: string | URL, _init?: RequestInit) => {
+			const url = typeof input === "string" ? input : input.toString();
+			if (url === "https://api.github.com/repos/openai/codex/releases/latest") {
+				return new Response(JSON.stringify({ tag_name: "rust-v0.0.0" }), { status: 200 });
+			}
+			if (url.startsWith("https://raw.githubusercontent.com/openai/codex/")) {
+				return new Response("PROMPT", { status: 200, headers: { etag: '"etag"' } });
+			}
+			return new Response("not found", { status: 404 });
+		});
+		global.fetch = fetchMock as unknown as typeof fetch;
+
+		type WsListener = (event: Event) => void;
+		const capturedHeaders: Array<Record<string, string> | undefined> = [];
+		class HeaderCaptureWebSocket {
+			static readonly CONNECTING = 0;
+			static readonly OPEN = 1;
+			static readonly CLOSING = 2;
+			static readonly CLOSED = 3;
+			readyState = HeaderCaptureWebSocket.CONNECTING;
+			#listeners = new Map<string, Set<WsListener>>();
+
+			constructor(_url: string, options?: { headers?: Record<string, string> }) {
+				capturedHeaders.push(options?.headers);
+				setTimeout(() => {
+					this.readyState = HeaderCaptureWebSocket.OPEN;
+					this.#emit("open", new Event("open"));
+				}, 0);
+			}
+
+			addEventListener(type: string, listener: unknown): void {
+				if (typeof listener !== "function") return;
+				const listeners = this.#listeners.get(type) ?? new Set<WsListener>();
+				listeners.add(listener as WsListener);
+				this.#listeners.set(type, listeners);
+			}
+
+			removeEventListener(type: string, listener: unknown): void {
+				if (typeof listener !== "function") return;
+				const listeners = this.#listeners.get(type);
+				listeners?.delete(listener as WsListener);
+			}
+
+			send(): void {
+				this.#emit("message", {
+					data: JSON.stringify({
+						type: "response.output_item.added",
+						item: { type: "message", id: "msg_ws", role: "assistant", status: "in_progress", content: [] },
+					}),
+				} as unknown as Event);
+				this.#emit("message", {
+					data: JSON.stringify({ type: "response.content_part.added", part: { type: "output_text", text: "" } }),
+				} as unknown as Event);
+				this.#emit("message", {
+					data: JSON.stringify({ type: "response.output_text.delta", delta: "ok" }),
+				} as unknown as Event);
+				this.#emit("message", {
+					data: JSON.stringify({
+						type: "response.output_item.done",
+						item: {
+							type: "message",
+							id: "msg_ws",
+							role: "assistant",
+							status: "completed",
+							content: [{ type: "output_text", text: "ok" }],
+						},
+					}),
+				} as unknown as Event);
+				this.#emit("message", {
+					data: JSON.stringify({
+						type: "response.done",
+						response: {
+							id: "resp_ws",
+							status: "completed",
+							usage: {
+								input_tokens: 5,
+								output_tokens: 3,
+								total_tokens: 8,
+								input_tokens_details: { cached_tokens: 0 },
+							},
+						},
+					}),
+				} as unknown as Event);
+			}
+
+			close(): void {
+				this.readyState = HeaderCaptureWebSocket.CLOSED;
+			}
+
+			#emit(type: string, event: Event): void {
+				const listeners = this.#listeners.get(type);
+				if (!listeners) return;
+				for (const listener of listeners) {
+					listener(event);
+				}
+			}
+		}
+
+		global.WebSocket = HeaderCaptureWebSocket as unknown as typeof WebSocket;
+
+		const websocketModel: Model<"openai-codex-responses"> = {
+			id: "gpt-5.1-codex",
+			name: "GPT-5.1 Codex",
+			api: "openai-codex-responses",
+			provider: "openai-codex",
+			baseUrl: "https://chatgpt.com/backend-api",
+			reasoning: true,
+			preferWebsockets: true,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 128000,
+			maxTokens: 128000,
+		};
+
+		const context: Context = {
+			systemPrompt: "You are a helpful assistant.",
+			messages: [{ role: "user", content: "Say hello", timestamp: Date.now() }],
+		};
+
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		await streamOpenAICodexResponses(websocketModel, context, {
+			apiKey: token,
+			sessionId: "ws-literal-session",
+			providerSessionState,
+		}).result();
+
+		const expectedCacheKey = `omp-${Bun.hash(`gpt-5.1-codex\u0000You are a helpful assistant.`).toString(36)}`;
+		expect(capturedHeaders.length).toBeGreaterThan(0);
+		const headers = capturedHeaders[0];
+		expect(headers).toBeDefined();
+		expect(headers?.conversation_id).toBe(expectedCacheKey);
+		expect(headers?.session_id).toBe(expectedCacheKey);
+		// Anti-regression: must NOT fall back to the literal sessionId when a
+		// systemPrompt is present.
+		expect(headers?.session_id).not.toBe("ws-literal-session");
 	});
 
 	it("rejects gpt-5.3-codex minimal reasoning effort instead of clamping", async () => {
@@ -636,9 +1089,11 @@ describe("openai-codex streaming", () => {
 			}
 			if (url === "https://chatgpt.com/backend-api/codex/responses") {
 				const headers = init?.headers instanceof Headers ? init.headers : undefined;
-				// Verify headers are not set when sessionId is not provided
+				const body = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : null;
+				// Opt-out: neither HTTP headers nor the body field should carry a cache-routing value.
 				expect(headers?.has("conversation_id")).toBe(false);
 				expect(headers?.has("session_id")).toBe(false);
+				expect(body?.prompt_cache_key).toBeUndefined();
 
 				return new Response(sse, {
 					status: 200,

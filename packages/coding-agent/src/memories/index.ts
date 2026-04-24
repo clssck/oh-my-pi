@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type * as fsNode from "node:fs";
+import * as fsNode from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
@@ -1092,12 +1092,60 @@ function loadMemoryConfig(settings: Settings): MemoryRuntimeConfig {
 	};
 }
 
-export function getMemoryRoot(agentDir: string, cwd: string): string {
-	return path.join(getMemoriesDir(agentDir), encodeProjectPath(cwd));
+/**
+ * Resolve the canonical project anchor for memory scoping by walking up from
+ * `cwd` to the nearest `.git` (file or directory — submodules and worktrees use
+ * a file). Returns the anchor directory, or the literal (resolved) `cwd` when
+ * no `.git` is found along the walk.
+ *
+ * Memory is keyed by anchor rather than raw `cwd` so every subdir of the same
+ * checkout shares one memory space. Without this anchor, running omp from a
+ * subdir loses project memory and fragments the system-prompt cache across
+ * cwd variations (the memory summary block is pre-inlined into the prompt,
+ * and its presence/absence changes the prefix bytes and the cache route).
+ *
+ * The input `cwd` is canonicalized through `fs.realpathSync` first so users
+ * who access a checkout via a symlink (e.g. `/work/repo` -> the real path)
+ * land on the same anchor as direct access. If realpath fails (e.g. the path
+ * does not exist or permission is denied) fall back to `path.resolve` so the
+ * walk still produces a deterministic result.
+ */
+function findProjectAnchor(cwd: string): string {
+	let absolute: string;
+	try {
+		absolute = fsNode.realpathSync(cwd);
+	} catch {
+		absolute = path.resolve(cwd);
+	}
+	let dir = absolute;
+	while (true) {
+		if (fsNode.existsSync(path.join(dir, ".git"))) return dir;
+		const parent = path.dirname(dir);
+		if (parent === dir) return absolute;
+		dir = parent;
+	}
 }
 
+export function getMemoryRoot(agentDir: string, cwd: string): string {
+	return path.join(getMemoriesDir(agentDir), encodeProjectPath(findProjectAnchor(cwd)));
+}
+
+// Maximum length of the encoded project directory name. Most filesystems cap
+// per-component filename length at 255 bytes; 200 leaves margin for the `--`
+// wrapper and any future suffix without risk of ENAMETOOLONG when memory
+// files are written underneath this directory.
+const MAX_ENCODED_PROJECT_NAME_LEN = 200;
+
 function encodeProjectPath(cwd: string): string {
-	return `--${cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
+	const stripped = cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-");
+	const wrapped = `--${stripped}--`;
+	if (wrapped.length <= MAX_ENCODED_PROJECT_NAME_LEN) return wrapped;
+	// Encoded form would exceed the filesystem filename limit. Keep a readable
+	// prefix for debuggability and append a short hash of the original cwd for
+	// uniqueness so distinct long paths still get distinct memory directories.
+	const hash = Bun.hash(cwd).toString(36);
+	const budget = MAX_ENCODED_PROJECT_NAME_LEN - hash.length - 6; // "--" + "--" + "--"
+	return `--${stripped.slice(0, budget)}--${hash}--`;
 }
 
 function unixNow(): number {

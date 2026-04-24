@@ -45,6 +45,7 @@ import {
 	hasCopilotVisionInput,
 	resolveGitHubCopilotBaseUrl,
 } from "./github-copilot-headers";
+import { splitVolatileTail } from "./openai-responses-shared";
 import { transformMessages } from "./transform-messages";
 
 export type AnthropicHeaderOptions = {
@@ -1047,11 +1048,30 @@ export function buildAnthropicSystemBlocks(
 	}
 
 	if (systemPrompt) {
+		// Split off the volatile cwd+date tail so that block can carry no
+		// cache_control. The stable prefix carries cache_control and stays warm
+		// across midnight rolls and cwd swaps; the small tail block re-caches
+		// cheaply by virtue of being content but not a breakpoint. Without this
+		// split, the whole system prompt's content hash rotates daily and the
+		// system breakpoint busts at every date roll.
+		//
+		// Refuse to split when the stable prefix would be empty — Anthropic's
+		// API rejects empty text blocks. Falls back to single-block behaviour
+		// (same as pre-fix: volatile tail carries the breakpoint and busts daily,
+		// but the request itself is still valid).
+		const split = cacheControl ? splitVolatileTail(sanitizedPrompt) : { stable: sanitizedPrompt, tail: "" };
+		const shouldSplit = split.tail.length > 0 && split.stable.length > 0;
 		blocks.push({
 			type: "text",
-			text: sanitizedPrompt,
+			text: shouldSplit ? split.stable : sanitizedPrompt,
 			...(cacheControl ? { cache_control: cacheControl } : {}),
 		});
+		if (shouldSplit) {
+			blocks.push({
+				type: "text",
+				text: split.tail,
+			});
+		}
 	}
 
 	return blocks.length > 0 ? blocks : undefined;
@@ -1214,7 +1234,16 @@ function applyPromptCaching(params: MessageCreateParamsStreaming, cacheControl?:
 	if (cacheBreakpointsUsed >= MAX_CACHE_BREAKPOINTS) return;
 
 	if (params.system && Array.isArray(params.system) && params.system.length > 0) {
-		applyCacheControlToLastBlock(params.system, cacheControl);
+		const systemBlocks = params.system as Array<AnthropicSystemBlock & CacheControlBlock>;
+		// buildAnthropicSystemBlocks may have already placed cache_control on the
+		// stable-prefix block when splitting off the volatile tail. If so, trust
+		// that placement — landing cache_control on the volatile tail block via
+		// applyCacheControlToLastBlock would re-introduce the daily-bust we just
+		// split to avoid.
+		const hasSystemCC = systemBlocks.some(b => b.cache_control != null);
+		if (!hasSystemCC) {
+			applyCacheControlToLastBlock(systemBlocks, cacheControl);
+		}
 		cacheBreakpointsUsed++;
 	}
 
@@ -1277,7 +1306,11 @@ function normalizeCacheControlBlockTtl(block: CacheControlBlock, seenFiveMinute:
 		return;
 	}
 	if (seenFiveMinute.value) {
-		delete cacheControl.ttl;
+		// Produce a fresh object so the mutation doesn't cascade through any
+		// blocks that share this cache_control reference (the main flow passes
+		// one reference to every placement site).
+		const { ttl: _, ...rest } = cacheControl;
+		block.cache_control = rest;
 	}
 }
 
@@ -1491,6 +1524,7 @@ function buildParams(
 	const systemBlocks = buildAnthropicSystemBlocks(context.systemPrompt, {
 		includeClaudeCodeInstruction: shouldInjectClaudeCodeInstruction,
 		billingPayload,
+		cacheControl,
 	});
 	if (systemBlocks) {
 		params.system = systemBlocks;

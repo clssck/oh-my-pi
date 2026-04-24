@@ -33,6 +33,7 @@ import {
 	appendResponsesToolResultMessages,
 	convertResponsesAssistantMessage,
 	convertResponsesInputContent,
+	derivePromptCacheKey,
 	normalizeResponsesToolCallIdForTransform,
 	processResponsesStream,
 } from "./openai-responses-shared";
@@ -273,7 +274,7 @@ function buildParams(
 		model: deploymentName,
 		input: messages,
 		stream: true,
-		prompt_cache_key: options?.sessionId,
+		prompt_cache_key: derivePromptCacheKey(model.id, context.systemPrompt, options?.sessionId),
 	};
 
 	if (options?.maxTokens) {

@@ -28,6 +28,119 @@ import { normalizeResponsesToolCallId } from "../utils";
 import type { AssistantMessageEventStream } from "../utils/event-stream";
 import { parseStreamingJson } from "../utils/json-parse";
 
+// The system prompt templates end with one of two known volatile tails,
+// substituted at render time:
+//
+// 1. system-prompt.md (default)
+//
+//      The current working directory is '{{cwd}}'.
+//      Today is '{{date}}'. Begin now.
+//
+// 2. custom-system-prompt.md (when the caller supplies a --custom-prompt)
+//
+//      Current date: {{date}}
+//      Current working directory: {{cwd}}
+//
+// Both forms embed values that rotate (cwd varies per project, date rolls
+// every midnight), so including them in the hash input rotates the OpenAI
+// prompt_cache_key and scatters otherwise-identical prefixes across
+// routing shards. Strip whichever tail is present before hashing.
+//
+// A regex like `'[^']*'` would break on cwds that contain an apostrophe
+// (e.g. `/home/me/my's project`) — the closing `'` match would fire inside
+// the cwd value, the full tail regex would fail, and the user would silently
+// regress to pre-fix behavior. Use position-based stripping via `lastIndexOf`
+// on a stable marker so value contents never break the strip.
+const STANDARD_TAIL_MARKER = "\nThe current working directory is '";
+// Relaxed from `...\s*$` to tolerate trailing content. When a caller composes
+// the default prompt with `--append-system-prompt <text>`, the resulting string
+// has the tail in the middle, not at end-of-string. Under the prior strict
+// anchor the structure regex rejected those compositions and the split fell
+// through, silently regressing those users to the pre-cache-split behaviour.
+// The lazy middle quantifier (`*?`) keeps matching deterministic and prevents
+// pathological backtracking on long inputs.
+const STANDARD_TAIL_STRUCTURE = /'\.\r?\nToday is '[\s\S]*?'\.\s*Begin now\./;
+
+const CUSTOM_TAIL_MARKER = "\nCurrent date: ";
+// Relaxed symmetrically for the custom-prompt composition. We still require
+// the tail to begin with a single-line date value followed by the working
+// directory marker; anything after is treated as post-tail content.
+const CUSTOM_TAIL_STRUCTURE = /^[^\r\n]+\r?\nCurrent working directory: /;
+
+function stripByMarker(systemPrompt: string, marker: string, structure: RegExp): string | null {
+	const idx = systemPrompt.lastIndexOf(marker);
+	if (idx < 0) return null;
+	const tail = systemPrompt.slice(idx + marker.length);
+	if (!structure.test(tail)) return null;
+	return systemPrompt.slice(0, idx);
+}
+
+/**
+ * Split the system prompt into its stable prefix and its volatile tail.
+ *
+ * The Oh My Pi prompt templates end with one of two known variable tails
+ * (cwd + date). Callers that cache-key on the system prompt need the stable
+ * prefix; callers that cache the *content* (Anthropic) need both parts as
+ * separate blocks so the tail's per-day/per-cwd churn doesn't invalidate the
+ * stable prefix's cache breakpoint.
+ *
+ * The structure regexes are anchored at tail-start but not tail-end, so a
+ * composed prompt like `${defaultPrompt}\n\n${appendPrompt}` (produced by
+ * `--append-system-prompt` without an explicit `--system-prompt`) still
+ * splits correctly: the stable prefix is everything before the tail marker,
+ * and the returned `tail` carries the cwd+date lines plus the trailing
+ * append content. The model-visible bytes are preserved — `stable + tail`
+ * is always byte-identical to the input.
+ *
+ * Returns `tail === ""` when no known tail is present, so callers can treat a
+ * non-empty `tail` as the signal to split.
+ */
+export function splitVolatileTail(systemPrompt: string): { stable: string; tail: string } {
+	const stripped =
+		stripByMarker(systemPrompt, STANDARD_TAIL_MARKER, STANDARD_TAIL_STRUCTURE) ??
+		stripByMarker(systemPrompt, CUSTOM_TAIL_MARKER, CUSTOM_TAIL_STRUCTURE);
+	if (stripped === null) return { stable: systemPrompt, tail: "" };
+	return { stable: stripped, tail: systemPrompt.slice(stripped.length) };
+}
+
+export function stripVolatileTail(systemPrompt: string): string {
+	return splitVolatileTail(systemPrompt).stable;
+}
+
+/**
+ * Derive a stable prompt_cache_key for OpenAI-style Responses endpoints.
+ *
+ * Prior to this helper each caller passed `options?.sessionId` — a UUIDv7
+ * generated fresh per OMP session — which meant every new session was cold
+ * against OpenAI's / Azure's / Codex's prompt cache router. Hashing
+ * `(modelId, systemPrompt)` collapses distinct sessionIds onto one cache
+ * route per `(model, systemPrompt)` tuple. Repeat fresh sessions with the
+ * same system prompt share a cache slot and hit on turn 1.
+ *
+ * Additional stabilization: the system prompt template ends with a volatile
+ * two-line tail naming the current working directory and today's date. If
+ * those substituted values participate in the hash, the routing key rotates
+ * every midnight and every time the user switches project cwd, forcing a
+ * cold miss on what would otherwise be a warm prefix. Strip that known tail
+ * before hashing so the key stays stable when only cwd/date change.
+ *
+ * Opt-outs:
+ * - `sessionId === undefined` returns `undefined` so callers that want no
+ *   cache routing (the pre-existing test contract) keep that behavior.
+ * - Empty `systemPrompt` returns `sessionId` verbatim so callers that pass
+ *   a sessionId without a system prompt still get a routing value.
+ */
+export function derivePromptCacheKey(
+	modelId: string,
+	systemPrompt: string | undefined,
+	sessionId: string | undefined,
+): string | undefined {
+	if (!sessionId) return undefined;
+	if (!systemPrompt) return sessionId;
+	const stable = stripVolatileTail(systemPrompt);
+	return `omp-${Bun.hash(`${modelId}\u0000${stable}`).toString(36)}`;
+}
+
 export function encodeTextSignatureV1(id: string, phase?: TextSignatureV1["phase"]): string {
 	const payload: TextSignatureV1 = { v: 1, id };
 	if (phase) payload.phase = phase;

@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- Stabilized prompt-cache routing across OpenAI Codex, direct OpenAI Responses, Azure OpenAI Responses, and Anthropic by deriving cache affinity from stable model/system-prompt content while ignoring volatile cwd/date/custom-prompt tails.
 - Fixed Cursor provider losing conversation history on follow-up turns (model responding "this appears to be the start of our session") by populating `ConversationStateStructure.rootPromptMessagesJson` with JSON blob IDs for the system prompt plus prior user/assistant/tool-result messages. Cursor's server builds the model prompt from `rootPromptMessagesJson`, not from the protobuf `turns[]` tree, so sending only the system prompt there caused prior turns to be dropped
 - Fixed Cursor provider multi-turn conversations failing with `Connect error internal: Blob not found` on the second message by storing `ConversationStateStructure.turns`, `AgentConversationTurnStructure.user_message`, and `AgentConversationTurnStructure.steps` as content-addressed blob IDs in the KV store (matching the existing handling for `rootPromptMessagesJson`) rather than sending the raw serialized bytes inline ([#678](https://github.com/can1357/oh-my-pi/issues/678))
 
@@ -27,6 +28,8 @@
 - Added `gpt-image-2` to the `litellm` built-in model catalog
 - Added `isCopilotTransientModelError()` and `callWithCopilotModelRetry()` helpers in `utils/retry` that detect GitHub Copilot's intermittent `HTTP 400 model_not_supported` responses for preview models (`gpt-5.3-codex`, `gpt-5.4`, `gpt-5.4-mini`, ...) and retry the request up to three times with backoff. OpenAI Responses, OpenAI Completions, and Anthropic provider paths now participate in this retry when the model is served through Copilot.
 - Added OpenAI Responses custom-tool grammar support for Codex-style `apply_patch` calls, including freeform streaming, history replay, and forced tool-choice mapping to the custom wire name.
+
+- Added opt-in `PI_CODEX_PROMPT_CACHE_RETENTION` env flag (`24h` or `in_memory`) that forwards `prompt_cache_retention` on the OpenAI Codex Responses body. Default is unset so the field stays stripped, because the Codex subscription backend currently rejects the parameter ("Unsupported parameter: prompt_cache_retention" / `invalid_request_error`; see [openai/codex#17815](https://github.com/openai/codex/issues/17815), rolled back 2026-04-14; re-enable tracked in [openai/codex#18130](https://github.com/openai/codex/issues/18130)). Direct OpenAI Responses continues to set `prompt_cache_retention: "24h"` separately when pointed at `api.openai.com`, which already honors it.
 
 ### Changed
 

@@ -57,6 +57,7 @@ import {
 } from "./openai-codex/request-transformer";
 import { parseCodexError } from "./openai-codex/response-handler";
 import {
+	derivePromptCacheKey,
 	encodeResponsesToolCallId,
 	encodeTextSignatureV1,
 	mapOpenAIResponsesStopReason,
@@ -490,7 +491,7 @@ async function buildTransformedCodexRequestBody(
 		model: model.id,
 		input: [...convertMessages(model, context)],
 		stream: true,
-		prompt_cache_key: options?.sessionId,
+		prompt_cache_key: derivePromptCacheKey(model.id, context.systemPrompt, options?.sessionId),
 	};
 
 	if (options?.maxTokens) {
@@ -612,7 +613,12 @@ async function openCodexWebSocketTransport(
 		requestContext.requestHeaders,
 		requestContext.accountId,
 		requestContext.apiKey,
-		options?.sessionId,
+		// Use the body's content-derived prompt_cache_key for the conversation_id /
+		// session_id HTTP headers (Codex cache router keys off those headers).
+		// The websocket private/public session keys (getCodexWebSocketSessionKey /
+		// getCodexPublicSessionKey) keep options.sessionId for connection
+		// multiplexing — those are orthogonal to cache routing.
+		requestContext.transformedBody.prompt_cache_key ?? options?.sessionId,
 		"websocket",
 		websocketState,
 	);
@@ -655,7 +661,14 @@ async function openCodexSseTransport(
 			requestContext.requestHeaders,
 			requestContext.accountId,
 			requestContext.apiKey,
-			options?.sessionId,
+			// Use the body's (content-derived) prompt_cache_key for the conversation_id /
+			// session_id HTTP headers too. Codex routes its cache by those headers, so
+			// keeping all three values coupled to one content-derived key lets fresh
+			// OMP sessions with the same system prompt share a cache route.
+			// Mirror of the websocket transport's coupling: Codex cache routes
+			// by conversation_id / session_id HTTP headers, and the body field
+			// prompt_cache_key is already the content-derived value.
+			body.prompt_cache_key ?? options?.sessionId,
 			body,
 			state,
 			requestSetup.requestSignal,

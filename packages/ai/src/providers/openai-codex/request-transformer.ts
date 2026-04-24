@@ -1,3 +1,4 @@
+import { $env } from "@oh-my-pi/pi-utils";
 import type { Effort } from "../../model-thinking";
 import { requireSupportedEffort } from "../../model-thinking";
 import type { Api, Model } from "../../types";
@@ -153,6 +154,18 @@ export async function transformRequestBody(
 
 	delete body.max_output_tokens;
 	delete body.max_completion_tokens;
+
+	// Extended prompt-cache retention. Opt-in via PI_CODEX_PROMPT_CACHE_RETENTION because
+	// the Codex subscription backend (chatgpt.com/backend-api) currently rejects this
+	// field with "Unknown parameter: 'prompt_cache_retention'" (see openai/codex#17815,
+	// rolled back 2026-04-14; re-enable tracked in openai/codex#18130). Direct OpenAI
+	// Responses (api.openai.com) honors it and wires it separately in openai-responses.ts.
+	const retention = $env.PI_CODEX_PROMPT_CACHE_RETENTION;
+	if (retention === "24h" || retention === "in_memory") {
+		body.prompt_cache_retention = retention;
+	} else {
+		delete body.prompt_cache_retention;
+	}
 
 	return body;
 }

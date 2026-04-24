@@ -52,6 +52,7 @@ import {
 	collectKnownCallIds,
 	convertResponsesAssistantMessage,
 	convertResponsesInputContent,
+	derivePromptCacheKey,
 	normalizeResponsesToolCallIdForTransform,
 	processResponsesStream,
 } from "./openai-responses-shared";
@@ -172,7 +173,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 
 		try {
 			// Keep request headers and prompt-cache routing on the same session-derived value.
-			const cacheSessionId = getOpenAIResponsesCacheSessionId(options);
+			const cacheSessionId = getOpenAIResponsesCacheSessionId(model, context, options);
 			const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
 			const { client, copilotPremiumRequests, baseUrl } = createClient(
 				model,
@@ -320,9 +321,12 @@ function createClient(
 }
 
 function getOpenAIResponsesCacheSessionId(
+	model: Model<"openai-responses">,
+	context: Context,
 	options: Pick<OpenAIResponsesOptions, "cacheRetention" | "sessionId"> | undefined,
 ): string | undefined {
-	return resolveCacheRetention(options?.cacheRetention) === "none" ? undefined : options?.sessionId;
+	if (resolveCacheRetention(options?.cacheRetention) === "none") return undefined;
+	return derivePromptCacheKey(model.id, context.systemPrompt, options?.sessionId);
 }
 
 function buildParams(
@@ -352,7 +356,7 @@ function buildParams(
 	}
 
 	const cacheRetention = resolveCacheRetention(options?.cacheRetention);
-	const promptCacheKey = getOpenAIResponsesCacheSessionId(options);
+	const promptCacheKey = getOpenAIResponsesCacheSessionId(model, context, options);
 	const params: OpenAIResponsesSamplingParams = {
 		model: model.id,
 		input: messages,

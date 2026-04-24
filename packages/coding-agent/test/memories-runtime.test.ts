@@ -379,3 +379,92 @@ describe("buildMemoryToolDeveloperInstructions", () => {
 		expect(payload).toContain("...[truncated]...");
 	});
 });
+
+describe("getMemoryRoot project anchor", () => {
+	afterEach(async () => {
+		for (const dir of createdDirs) {
+			await fs.rm(dir, { recursive: true, force: true });
+		}
+		createdDirs.clear();
+	});
+
+	test("subdir of a git repo resolves to the same memory root as the repo root", async () => {
+		const agentDir = await makeTempDir("memory-anchor-agent");
+		const repoRoot = await makeTempDir("memory-anchor-repo");
+		await fs.mkdir(path.join(repoRoot, ".git"));
+		const nestedSubdir = path.join(repoRoot, "packages", "ai", "src");
+		await fs.mkdir(nestedSubdir, { recursive: true });
+
+		const rootMemory = getMemoryRoot(agentDir, repoRoot);
+		const subdirMemory = getMemoryRoot(agentDir, nestedSubdir);
+
+		expect(subdirMemory).toBe(rootMemory);
+	});
+
+	test("detects .git when it is a file (worktree / submodule layout) not just a directory", async () => {
+		const agentDir = await makeTempDir("memory-anchor-agent");
+		const worktree = await makeTempDir("memory-anchor-worktree");
+		await fs.writeFile(path.join(worktree, ".git"), "gitdir: /elsewhere/.git/worktrees/x\n");
+		const subdir = path.join(worktree, "deep", "nested");
+		await fs.mkdir(subdir, { recursive: true });
+
+		expect(getMemoryRoot(agentDir, subdir)).toBe(getMemoryRoot(agentDir, worktree));
+	});
+
+	test("falls back to the literal cwd when no .git is found anywhere up the tree", async () => {
+		const agentDir = await makeTempDir("memory-anchor-agent");
+		const nonRepoA = await makeTempDir("memory-anchor-nonrepo-a");
+		const nonRepoB = await makeTempDir("memory-anchor-nonrepo-b");
+
+		// Without a project marker, distinct cwds must keep distinct memory spaces.
+		// (Otherwise unrelated tmp/working dirs would silently collide on the same
+		// shared memory at $TMPDIR or /, polluting one project with another's notes.)
+		expect(getMemoryRoot(agentDir, nonRepoA)).not.toBe(getMemoryRoot(agentDir, nonRepoB));
+	});
+
+	test("follows symlinks so accessing a checkout via a symlinked path yields the same anchor as direct access", async () => {
+		const agentDir = await makeTempDir("memory-anchor-agent");
+		const realRepo = await makeTempDir("memory-anchor-real");
+		await fs.mkdir(path.join(realRepo, ".git"));
+		const subdirReal = path.join(realRepo, "src");
+		await fs.mkdir(subdirReal, { recursive: true });
+
+		// Place a symlink in a sibling location that points at the real repo. Users often have
+		// `/work/myrepo` -> `/home/u/projects/myrepo`; direct and symlinked access must land on
+		// the same memory, otherwise the anchor fix regresses for anyone using symlinked paths.
+		const symlinkDir = await makeTempDir("memory-anchor-link-parent");
+		const symlinkPath = path.join(symlinkDir, "linked-repo");
+		await fs.symlink(realRepo, symlinkPath);
+		const subdirLink = path.join(symlinkPath, "src");
+
+		expect(getMemoryRoot(agentDir, symlinkPath)).toBe(getMemoryRoot(agentDir, realRepo));
+		expect(getMemoryRoot(agentDir, subdirLink)).toBe(getMemoryRoot(agentDir, subdirReal));
+	});
+
+	test("encodes very long cwd paths to a filesystem-safe length so mkdir does not ENAMETOOLONG", async () => {
+		const agentDir = await makeTempDir("memory-anchor-agent");
+		// Construct a cwd long enough that the raw encoded form would exceed the
+		// typical 255-byte filesystem filename limit.
+		const longSegment = "a".repeat(50);
+		const longCwd = `/tmp/${Array(8).fill(longSegment).join("/")}`;
+
+		const root = getMemoryRoot(agentDir, longCwd);
+		const encodedName = path.basename(root);
+		expect(encodedName.length).toBeLessThanOrEqual(255);
+
+		// And it must actually be writable — exercise the full filesystem path.
+		await fs.mkdir(root, { recursive: true });
+		await fs.writeFile(path.join(root, "memory_summary.md"), "probe");
+		await fs.rm(root, { recursive: true, force: true });
+	});
+
+	test("distinct long cwds hash-disambiguate to distinct encoded names", async () => {
+		const agentDir = await makeTempDir("memory-anchor-agent");
+		const base = `/tmp/${"a".repeat(50)}/${"b".repeat(50)}/${"c".repeat(50)}/${"d".repeat(50)}`;
+		const cwdA = `${base}/endA`;
+		const cwdB = `${base}/endB`;
+		// Both exceed the plain-encoding budget, so both take the hash-truncated
+		// branch. Distinct inputs must still produce distinct outputs.
+		expect(getMemoryRoot(agentDir, cwdA)).not.toBe(getMemoryRoot(agentDir, cwdB));
+	});
+});
