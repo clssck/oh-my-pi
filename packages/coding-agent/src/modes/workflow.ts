@@ -29,6 +29,10 @@ export function containsWorkflow(text: string): boolean {
 	return keywordInProse(text, WORKFLOW_WORD);
 }
 
+export function shouldInjectWorkflowNotice(text: string, enabled = true): boolean {
+	return enabled && containsWorkflow(text);
+}
+
 /**
  * Highlight every standalone "workflow"/"workflows" in `text` for editor display
  * with a warm amber→green gradient (hue 30..150), visually distinct from

@@ -478,6 +478,7 @@ export async function runRpcMode(
 					.prompt(command.message, {
 						images: command.images,
 						streamingBehavior: command.streamingBehavior,
+						workflowNotice: false,
 					})
 					.catch(e => output(error(id, "prompt", e.message)));
 				return success(id, "prompt");
@@ -501,7 +502,7 @@ export async function runRpcMode(
 			case "abort_and_prompt": {
 				await session.abort();
 				session
-					.prompt(command.message, { images: command.images })
+					.prompt(command.message, { images: command.images, workflowNotice: false })
 					.catch(e => output(error(id, "abort_and_prompt", e.message)));
 				return success(id, "abort_and_prompt");
 			}
