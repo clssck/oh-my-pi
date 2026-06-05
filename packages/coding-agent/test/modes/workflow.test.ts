@@ -1,6 +1,11 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { initTheme } from "../../src/modes/theme/theme";
-import { containsWorkflow, highlightWorkflow, WORKFLOW_NOTICE } from "../../src/modes/workflow";
+import {
+	containsWorkflow,
+	highlightWorkflow,
+	shouldInjectWorkflowNotice,
+	WORKFLOW_NOTICE,
+} from "../../src/modes/workflow";
 
 beforeAll(() => {
 	// highlightWorkflow reads the global theme's color mode.
@@ -24,6 +29,11 @@ describe("workflow keyword detection", () => {
 		expect(containsWorkflow("packages/coding-agent/test/modes/workflow.test.ts")).toBe(false);
 		expect(containsWorkflow("do it. workflow.")).toBe(false);
 		expect(containsWorkflow("nothing to see here")).toBe(false);
+	});
+	it("allows headless callers to suppress workflow notice injection", () => {
+		expect(shouldInjectWorkflowNotice("please workflow this rollout")).toBe(true);
+		expect(shouldInjectWorkflowNotice("please workflow this rollout", false)).toBe(false);
+		expect(shouldInjectWorkflowNotice("nothing to see here", false)).toBe(false);
 	});
 });
 
