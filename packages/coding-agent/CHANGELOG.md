@@ -12,6 +12,8 @@
 
 ### Fixed
 
+- Fixed `omp auth-gateway` model routing to expose provider-qualified aliases such as `openai-codex/gpt-5.5`, so clients can disambiguate model ID collisions while bare IDs remain backwards-compatible.
+
 - Fixed transcript scrollback stability on terminals with eager erase risk so completed assistant messages remain stable while new streaming lines are rendering
 - Fixed Ctrl+R history search results to remain globally sorted by prompt recency after merging FTS prefix matches with substring fallback matches.
 - Fixed Exa web search with no stored or environment credential to use the public Exa MCP fallback again, preserving the auth storage → `EXA_API_KEY` → `mcp.exa.ai` resolution order ([#1860](https://github.com/can1357/oh-my-pi/issues/1860)).
