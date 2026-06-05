@@ -167,7 +167,7 @@ import { getCurrentThemeName, theme } from "../modes/theme/theme";
 import { parseTurnBudget } from "../modes/turn-budget";
 import { containsUltrathink, ULTRATHINK_NOTICE } from "../modes/ultrathink";
 import { computeNonMessageTokens } from "../modes/utils/context-usage";
-import { containsWorkflow, WORKFLOW_NOTICE } from "../modes/workflow";
+import { shouldInjectWorkflowNotice, WORKFLOW_NOTICE } from "../modes/workflow";
 import { createPlanReadMatcher } from "../plan-mode/plan-protection";
 import type { PlanModeState } from "../plan-mode/state";
 import autoContinuePrompt from "../prompts/system/auto-continue.md" with { type: "text" };
@@ -408,6 +408,8 @@ export interface PromptOptions {
 	attribution?: MessageAttribution;
 	/** Skip pre-send compaction checks for this prompt (internal use for maintenance flows). */
 	skipCompactionCheck?: boolean;
+	/** Whether standalone `workflow` should inject the hidden workflow notice. Defaults to true. */
+	workflowNotice?: boolean;
 }
 
 /** Result from a handoff operation. */
@@ -4296,7 +4298,7 @@ export class AgentSession {
 					timestamp,
 				});
 			}
-			if (containsWorkflow(expandedText)) {
+			if (shouldInjectWorkflowNotice(expandedText, options?.workflowNotice ?? true)) {
 				keywordNotices.push({
 					role: "custom",
 					customType: "workflow-notice",
