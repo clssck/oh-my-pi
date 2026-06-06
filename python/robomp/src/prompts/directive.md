@@ -1,6 +1,6 @@
 # Directive on {{repo.full_name}}#{{inbound.number}} ({{inbound.kind}})
 
-**@{{directive.author}}** posted an authoritative directive on this thread ({{origin.description}}) — either a maintainer who tagged you or a configured reviewer bot. Treat as binding. OVERRIDES any prior plan or seed todos.
+**@{{directive.author}}** posted an authoritative directive on this thread ({{origin.description}}) — a maintainer mention, an owner/allowlisted implementation request, or a configured reviewer bot. Treat as binding. OVERRIDES any prior plan or seed todos.
 
 Current PR state: `{{state.pr_status}}`.
 

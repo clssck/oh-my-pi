@@ -5,6 +5,7 @@ import hmac
 
 from robomp.github_events import (
     extract_mention,
+    is_direct_implementation_request,
     is_implementation_authorizer,
     is_maintainer,
     rate_limit_cap,
@@ -557,6 +558,13 @@ def test_is_implementation_authorizer_rejects_non_owner_associations() -> None:
         assert not is_implementation_authorizer("stranger", assoc, maintainers=frozenset()), assoc
 
 
+def test_is_direct_implementation_request_matches_pr_requests() -> None:
+    assert is_direct_implementation_request("Create a pr bro")
+    assert is_direct_implementation_request("go ahead with the plan")
+    assert not is_direct_implementation_request("looks good to me")
+    assert not is_direct_implementation_request("can it be improved?")
+
+
 def test_route_directive_set_on_issue_comment_when_owner_mentions_bot() -> None:
     decision = route(
         "issue_comment",
@@ -645,7 +653,7 @@ def test_route_directive_unset_for_random_user_even_with_mention() -> None:
     assert decision.directive_body is None
 
 
-def test_route_directive_unset_for_maintainer_without_mention() -> None:
+def test_route_directive_unset_for_maintainer_without_action_request() -> None:
     decision = route(
         "issue_comment",
         {
@@ -661,6 +669,48 @@ def test_route_directive_unset_for_maintainer_without_mention() -> None:
         allowlist=ALLOWLIST,
         bot_login=BOT,
     )
+    assert decision.directive is False
+
+
+def test_route_directive_set_for_owner_direct_pr_request_without_mention() -> None:
+    decision = route(
+        "issue_comment",
+        {
+            "action": "created",
+            "comment": {
+                "user": {"login": "can1357"},
+                "author_association": "OWNER",
+                "body": "Create a pr bro",
+            },
+            "issue": {"number": 9},
+            "repository": {"full_name": "octo/widget"},
+        },
+        allowlist=ALLOWLIST,
+        bot_login=BOT,
+    )
+    assert decision.directive is True
+    assert decision.directive_body == "Create a pr bro"
+    assert decision.directive_author == "can1357"
+    assert decision.directive_authorizes_impl is True
+
+
+def test_route_directive_unset_for_random_user_direct_pr_request() -> None:
+    decision = route(
+        "issue_comment",
+        {
+            "action": "created",
+            "comment": {
+                "user": {"login": "stranger"},
+                "author_association": "NONE",
+                "body": "Create a pr bro",
+            },
+            "issue": {"number": 9},
+            "repository": {"full_name": "octo/widget"},
+        },
+        allowlist=ALLOWLIST,
+        bot_login=BOT,
+    )
+    assert decision.should_queue
     assert decision.directive is False
 
 

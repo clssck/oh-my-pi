@@ -8,7 +8,7 @@
 
 ---
 
-Maintainer **@{{directive.author}}** tagged you. Their directive is authoritative and OVERRIDES the default classification stop rules — e.g. `enhancement` normally waits for `accepted`, but this directive lets you proceed.
+Maintainer **@{{directive.author}}** issued an authoritative directive. It OVERRIDES the default classification stop rules — e.g. `enhancement` normally waits for `accepted`, but this directive lets you proceed.
 
 ---
 

@@ -15,6 +15,12 @@ from robomp.pragmas import parse_pragmas
 
 log = logging.getLogger(__name__)
 
+_DIRECT_IMPLEMENTATION_RE = re.compile(
+    r"\b(?:go\s+ahead|do\s+it|ship\s+it|(?:create|open|make|send)\s+(?:a\s+)?(?:pr|pull\s+request)|implement\s+(?:this|it|that)?|fix\s+(?:this|it|that)?)\b",
+    re.IGNORECASE,
+)
+
+
 Decision = Literal["queue", "skip"]
 
 
@@ -140,6 +146,11 @@ def is_implementation_authorizer(
     return False
 
 
+def is_direct_implementation_request(body: str | None) -> bool:
+    """Return whether a maintainer comment explicitly asks the bot to implement."""
+    return isinstance(body, str) and _DIRECT_IMPLEMENTATION_RE.search(body) is not None
+
+
 def route(
     event_type: str,
     payload: Mapping[str, Any],
@@ -185,7 +196,7 @@ def route(
         return raw_login if raw_login in reviewer_bots else None
 
     def _directive_kwargs(comment: Mapping[str, Any] | None, login: str | None, assoc: str | None) -> dict[str, Any]:
-        """Decide whether this comment is a directive (reviewer-bot OR maintainer-mention)."""
+        """Decide whether this comment is an authoritative directive."""
         if not isinstance(comment, Mapping):
             return {}
         body = str(comment.get("body") or "")
@@ -205,7 +216,21 @@ def route(
             return {}
         stripped = extract_mention(body, bot_login)
         if stripped is None:
-            return {}
+            if not (
+                is_implementation_authorizer(login, assoc, maintainers=maintainers)
+                and is_direct_implementation_request(body)
+            ):
+                return {}
+            cleaned, pragmas = parse_pragmas(body)
+            if not cleaned.strip():
+                return {}
+            return {
+                "directive": True,
+                "directive_body": cleaned,
+                "directive_author": login,
+                "directive_pragmas": pragmas,
+                "directive_authorizes_impl": True,
+            }
         cleaned, pragmas = parse_pragmas(stripped)
         authorizes_impl = is_implementation_authorizer(login, assoc, maintainers=maintainers)
         return {
