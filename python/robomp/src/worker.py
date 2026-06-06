@@ -76,7 +76,7 @@ class ThreadMessage:
 
 @dataclass(slots=True, frozen=True)
 class DirectiveInfo:
-    """A maintainer's `@bot` mention captured as an authoritative instruction.
+    """A maintainer/reviewer directive captured as an authoritative instruction.
 
     `thread` is the full conversation context (issue/PR body + every prior
     comment + every review) up to the moment the directive fired.
