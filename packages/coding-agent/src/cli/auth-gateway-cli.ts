@@ -43,6 +43,7 @@ export interface AuthGatewayCommandArgs {
 	flags: {
 		json?: boolean;
 		bind?: string;
+		providers?: string[];
 		regenerate?: boolean;
 		/**
 		 * Disable bearer-token auth on inbound requests. Useful when the gateway
@@ -208,9 +209,18 @@ async function runServe(flags: AuthGatewayCommandArgs["flags"]): Promise<void> {
 	// to providers we hold credentials for. Bare ids stay first-write-wins for
 	// compatibility; provider-qualified aliases (`provider/model`) let clients
 	// disambiguate collisions such as Copilot `gpt-5.5` vs Codex `gpt-5.5`.
+	const providerFilter = flags.providers && flags.providers.length > 0 ? new Set(flags.providers) : null;
 	const snapshot = storage.exportSnapshot();
 	const providersWithCreds = new Set<string>();
-	for (const entry of snapshot.credentials) providersWithCreds.add(entry.provider);
+	for (const entry of snapshot.credentials) {
+		if (providerFilter !== null && !providerFilter.has(entry.provider)) continue;
+		providersWithCreds.add(entry.provider);
+	}
+	if (providerFilter !== null && providersWithCreds.size === 0) {
+		throw new Error(
+			`Auth gateway provider filter matched no broker credentials: ${flags.providers?.join(", ") ?? ""}`,
+		);
+	}
 	const catalogModels: Model<Api>[] = [];
 	for (const provider of getBundledProviders()) {
 		if (!providersWithCreds.has(provider)) continue;

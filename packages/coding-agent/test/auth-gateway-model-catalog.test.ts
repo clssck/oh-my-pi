@@ -38,4 +38,16 @@ describe("auth-gateway model catalog", () => {
 		expect(listed.find(model => model.id === "openai-codex/gpt-5.5")?.provider).toBe("openai-codex");
 		expect(catalog.resolveModel("openai-codex/gpt-5.5")?.id).toBe("gpt-5.5");
 	});
+
+	test("does not expose omitted providers when gateway input is provider-scoped", () => {
+		const codex = gatewayTestModel("openai-codex", "gpt-5.5", "openai-codex-responses");
+		const catalog = createAuthGatewayModelCatalog([codex]);
+		const listed = Array.from(catalog.listModels());
+
+		expect(catalog.resolveModel("gpt-5.5")).toBe(codex);
+		expect(catalog.resolveModel("openai-codex/gpt-5.5")).toBe(codex);
+		expect(catalog.resolveModel("github-copilot/gpt-5.5")).toBeUndefined();
+		expect(listed.map(model => model.id)).toEqual(["gpt-5.5", "openai-codex/gpt-5.5"]);
+		expect(listed.every(model => model.provider === "openai-codex")).toBe(true);
+	});
 });

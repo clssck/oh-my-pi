@@ -24,6 +24,9 @@ export default class AuthGateway extends Command {
 	static flags = {
 		json: Flags.boolean({ description: "Output JSON (token/status/check)" }),
 		bind: Flags.string({ description: "Bind address for `serve` (host:port)", char: "b" }),
+		providers: Flags.string({
+			description: "Comma-separated provider allowlist for `serve` (for example: openai-codex)",
+		}),
 		regenerate: Flags.boolean({ description: "Regenerate the gateway bearer token (token)" }),
 		"no-auth": Flags.boolean({
 			description:
@@ -38,6 +41,7 @@ export default class AuthGateway extends Command {
 	static examples = [
 		"# Boot the gateway against the configured broker\n  omp auth-gateway serve",
 		"# Boot on a non-default port\n  omp auth-gateway serve --bind=127.0.0.1:4000",
+		"# Serve only selected broker-backed providers\n  omp auth-gateway serve --providers=openai-codex",
 		"# Print the gateway bearer token (creates one on first run)\n  omp auth-gateway token",
 		"# Rotate the gateway bearer token\n  omp auth-gateway token --regenerate",
 		"# Run on loopback without any bearer (anyone on this host can call)\n  omp auth-gateway serve --no-auth",
@@ -58,6 +62,10 @@ export default class AuthGateway extends Command {
 			flags: {
 				json: flags.json,
 				bind: flags.bind,
+				providers: flags.providers
+					?.split(",")
+					.map(provider => provider.trim())
+					.filter(provider => provider.length > 0),
 				regenerate: flags.regenerate,
 				noAuth: flags["no-auth"],
 				strict: flags.strict,
