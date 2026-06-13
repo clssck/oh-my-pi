@@ -41,6 +41,7 @@ export interface AuthGatewayCommandArgs {
 	flags: {
 		json?: boolean;
 		bind?: string;
+		providers?: string[];
 		regenerate?: boolean;
 		/**
 		 * Disable bearer-token auth on inbound requests. Useful when the gateway
@@ -60,6 +61,46 @@ export interface AuthGatewayCommandArgs {
 }
 
 const ACTIONS: readonly AuthGatewayAction[] = ["serve", "token", "status", "check"];
+
+export interface AuthGatewayModelCatalog {
+	resolveModel: (id: string) => Model<Api> | undefined;
+	listModels: () => Iterable<Model<Api>>;
+}
+
+function getGatewayQualifiedModelId(model: Model<Api>): string {
+	return `${model.provider}/${model.id}`;
+}
+
+function addListedModel(list: Model<Api>[], seen: Set<string>, model: Model<Api>, listedId: string): void {
+	if (seen.has(listedId)) return;
+	seen.add(listedId);
+	list.push(listedId === model.id ? model : { ...model, id: listedId });
+}
+
+export function createAuthGatewayModelCatalog(models: Iterable<Model<Api>>): AuthGatewayModelCatalog {
+	const bareModels = new Map<string, Model<Api>>();
+	const qualifiedModels = new Map<string, Model<Api>>();
+	const listedModels: Model<Api>[] = [];
+	const listedIds = new Set<string>();
+
+	for (const model of models) {
+		if (!bareModels.has(model.id)) {
+			bareModels.set(model.id, model);
+			addListedModel(listedModels, listedIds, model, model.id);
+		}
+
+		const qualifiedId = getGatewayQualifiedModelId(model);
+		if (!qualifiedModels.has(qualifiedId)) {
+			qualifiedModels.set(qualifiedId, model);
+			addListedModel(listedModels, listedIds, model, qualifiedId);
+		}
+	}
+
+	return {
+		resolveModel: (id: string) => bareModels.get(id) ?? qualifiedModels.get(id),
+		listModels: () => listedModels,
+	};
+}
 
 function getTokenFilePath(): string {
 	return path.join(getConfigRootDir(), "auth-gateway.token");
@@ -166,27 +207,32 @@ async function runServe(flags: AuthGatewayCommandArgs["flags"]): Promise<void> {
 	// to providers we hold credentials for. Format handlers ask `resolveModel`
 	// to translate a client-requested `model` field into a pi-ai `Model<Api>`
 	// before dispatch; `listModels` powers `/v1/models`.
+	const providerFilter = flags.providers && flags.providers.length > 0 ? new Set(flags.providers) : null;
 	const snapshot = storage.exportSnapshot();
 	const providersWithCreds = new Set<string>();
-	for (const entry of snapshot.credentials) providersWithCreds.add(entry.provider);
-	const modelById = new Map<string, Model<Api>>();
+	for (const entry of snapshot.credentials) {
+		if (providerFilter !== null && !providerFilter.has(entry.provider)) continue;
+		providersWithCreds.add(entry.provider);
+	}
+	if (providerFilter !== null && providersWithCreds.size === 0) {
+		throw new Error(
+			`Auth gateway provider filter matched no broker credentials: ${flags.providers?.join(", ") ?? ""}`,
+		);
+	}
+	const catalogModels: Model<Api>[] = [];
 	for (const provider of getBundledProviders()) {
 		if (!providersWithCreds.has(provider)) continue;
-		for (const model of getBundledModels(provider as GeneratedProvider)) {
-			// Always set the qualified key (no collision possible)
-			modelById.set(`${model.provider}/${model.id}`, model);
-			// Bare id as fallback for legacy clients (first-write-wins)
-			if (!modelById.has(model.id)) modelById.set(model.id, model);
-		}
+		catalogModels.push(...getBundledModels(provider as GeneratedProvider));
 	}
+	const modelCatalog = createAuthGatewayModelCatalog(catalogModels);
 
 	const handle = startAuthGateway({
 		storage,
 		bind,
 		bearerTokens: gatewayToken ? [gatewayToken] : [],
 		version: VERSION,
-		resolveModel: (id: string) => modelById.get(id),
-		listModels: () => modelById.values(),
+		resolveModel: modelCatalog.resolveModel,
+		listModels: modelCatalog.listModels,
 	});
 	process.stdout.write(`auth-gateway listening on ${handle.url}\n`);
 	if (gatewayToken) {

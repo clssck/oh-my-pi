@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed `omp auth-gateway serve` to support a provider allowlist for sidecar deployments that must expose only selected broker-backed providers.
+- Fixed ACP MCP transport rejection to keep compiling with the current ACP SDK discriminated union.
+
 ## [15.12.4] - 2026-06-13
 
 ### Breaking Changes
