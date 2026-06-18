@@ -42,7 +42,10 @@ function renderVariant(
 	const cached = cache.get(key);
 	if (cached !== undefined) return cached;
 
-	const ascii = renderMermaidAsciiSafe(source, direction ? { ...baseOptions, direction } : baseOptions);
+	const variantOptions = direction
+		? ({ ...baseOptions, direction } as MermaidAsciiRenderOptions & { direction: "TD" | "LR" })
+		: baseOptions;
+	const ascii = renderMermaidAsciiSafe(source, variantOptions);
 	cache.set(key, ascii);
 	return ascii;
 }
