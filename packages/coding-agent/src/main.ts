@@ -132,7 +132,10 @@ const HOST_DEFAULTED_SETTING_PATHS: SettingPath[] = [
 	// memory should opt in explicitly through their own settings layer.
 	"memory.backend",
 	"memories.enabled",
-	// Advisor is interactive-session assistance. Protocol hosts opt in explicitly
+];
+
+const ACP_ADVISOR_DEFAULTED_SETTING_PATHS: SettingPath[] = [
+	// Advisor is interactive-session assistance. ACP hosts opt in explicitly
 	// instead of inheriting a user's globally-enabled local preference.
 	"advisor.enabled",
 	"advisor.subagents",
@@ -158,6 +161,7 @@ function applyRpcDefaultSettingOverrides(targetSettings: Settings = settings): v
 
 function applyAcpDefaultSettingOverrides(targetSettings: Settings = settings): void {
 	applyDefaultSettingOverrides(HOST_DEFAULTED_SETTING_PATHS, targetSettings);
+	applyDefaultSettingOverrides(ACP_ADVISOR_DEFAULTED_SETTING_PATHS, targetSettings);
 }
 
 async function readPipedInput(): Promise<string | undefined> {

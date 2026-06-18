@@ -242,7 +242,7 @@ describe("ACP lazy startup", () => {
 		});
 	});
 
-	it("default-disables advisor for protocol hosts", async () => {
+	it("preserves explicit advisor config for RPC while ACP keeps protocol default off", async () => {
 		const { runRootCommand } = await import("@oh-my-pi/pi-coding-agent/main");
 
 		type ObservedAdvisorSettings = {
@@ -310,12 +310,16 @@ describe("ACP lazy startup", () => {
 			return observed;
 		};
 
-		for (const mode of ["rpc", "rpc-ui", "acp"] as const) {
+		for (const mode of ["rpc", "rpc-ui"] as const) {
 			await expect(runProtocolStartup(mode)).resolves.toEqual({
-				enabled: false,
-				subagents: false,
+				enabled: true,
+				subagents: true,
 			});
 		}
+		await expect(runProtocolStartup("acp")).resolves.toEqual({
+			enabled: false,
+			subagents: false,
+		});
 	});
 
 	it("honors explicit todo settings for protocol hosts", async () => {

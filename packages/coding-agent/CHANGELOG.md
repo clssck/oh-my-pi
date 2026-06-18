@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed RPC hosts to honor explicit advisor settings so headless deployments can enable an advisor model through config.
+- Fixed `omp auth-gateway serve` to support a provider allowlist for sidecar deployments that must expose only selected broker-backed providers.
+- Fixed ACP MCP transport rejection to keep compiling with the current ACP SDK discriminated union.
+
 ## [16.0.7] - 2026-06-18
 
 ### Fixed

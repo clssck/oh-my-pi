@@ -2349,7 +2349,7 @@ async def test_directive_handler_attaches_thread_from_github(
             "created_at": "2026-05-03T20:00:00Z",
         },
         "repository": {"full_name": "octo/widget"},
-        "_robomp_directive": {"body": "do X", "author": "can1357"},
+        "_robomp_directive": {"body": "do X", "author": "can1357", "authorizes_impl": True},
     }
     # Pre-seed an issue row so we exercise the "existing, non-finalized" path
     # (otherwise we'd hit the bootstrap branch which is covered elsewhere).
@@ -2369,6 +2369,7 @@ async def test_directive_handler_attaches_thread_from_github(
     directive = stub_run_task[0]["directive"]
     assert directive is not None
     assert directive.body == "do X"
+    assert directive.authorizes_impl is True
     # Thread must include the body + both comments, in chronological order.
     kinds_authors = [(m.kind, m.author) for m in directive.thread]
     assert ("issue_body", "alice") in kinds_authors
