@@ -34,6 +34,9 @@ export default class AuthGateway extends Command {
 			description:
 				"For `check`: additionally probe each credential against its provider's chat-completion endpoint. Slower; consumes a tiny amount of quota per credential.",
 		}),
+		providers: Flags.string({
+			description: "Comma-separated provider allowlist for `serve` (for example: openai-codex)",
+		}),
 	};
 
 	static examples = [
@@ -46,6 +49,7 @@ export default class AuthGateway extends Command {
 		"# Probe each broker credential to see which one is producing 401s\n  omp auth-gateway check",
 		"# Same, machine-readable for scripts\n  omp auth-gateway check --json",
 		"# Strict check — also exercises each credential with a real chat-completion ping\n  omp auth-gateway check --strict",
+		"# Serve only selected broker-backed providers\n  omp auth-gateway serve --providers=openai-codex",
 	];
 
 	async run(): Promise<void> {
@@ -62,6 +66,10 @@ export default class AuthGateway extends Command {
 				regenerate: flags.regenerate,
 				noAuth: flags["no-auth"],
 				strict: flags.strict,
+				providers: flags.providers
+					?.split(",")
+					.map(provider => provider.trim())
+					.filter(provider => provider.length > 0),
 			},
 		};
 		await initTheme();
