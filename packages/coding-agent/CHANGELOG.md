@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed `omp auth-gateway serve` to support a provider allowlist for sidecar deployments that must expose only selected broker-backed providers, with provider-qualified `/v1/models` aliases that keep bare model ids backward-compatible.
+- Fixed ACP MCP transport rejection to keep compiling against the current ACP SDK discriminated union.
+
 ## [16.1.17] - 2026-06-24
 
 ### Fixed
