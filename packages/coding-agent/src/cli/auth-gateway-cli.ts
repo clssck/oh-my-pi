@@ -31,7 +31,6 @@ import {
 	type SnapshotResponse,
 } from "@oh-my-pi/pi-ai/auth-broker";
 import { DEFAULT_AUTH_GATEWAY_BIND, startAuthGateway } from "@oh-my-pi/pi-ai/auth-gateway";
-import { type GeneratedProvider, getBundledModels } from "@oh-my-pi/pi-catalog/models";
 import { getConfigRootDir, isEnoent, logger, VERSION } from "@oh-my-pi/pi-utils";
 import chalk from "@oh-my-pi/pi-utils/chalk";
 import { ModelRegistry } from "../config/model-registry";
@@ -59,8 +58,15 @@ export interface AuthGatewayCommandArgs {
 		 * actually usable" signal. Slower and consumes a tiny amount of quota.
 		 */
 		strict?: boolean;
+		/**
+		 * Restrict `serve` to a comma-separated provider allowlist. Sidecar
+		 * deployments (e.g. robomp's Codex-only gateway) expose just the
+		 * providers they intend to route, instead of every broker credential.
+		 */
+		providers?: string[];
 	};
 }
+
 
 const ACTIONS: readonly AuthGatewayAction[] = ["serve", "token", "status", "check"];
 
@@ -198,19 +204,22 @@ async function runServe(flags: AuthGatewayCommandArgs["flags"]): Promise<void> {
 	await storage.reload();
 
 	// Build the model resolver + catalog from the ModelRegistry — the same
-	// component the TUI/CLI use — scoped to providers we hold credentials for.
-	// `getAll()` is a superset of the bundled catalog (bundled first, then
-	// cached + broker-discovered), so the discovery-only models omp itself
-	// reaches become routable through the gateway instead of freezing on the
-	// compiled snapshot. `ignoreLocalModelConfig` keeps the host's `models.yml`
-	// out of the picture: client-side provider overrides (baseUrl/apiKey/headers/
-	// transport) and custom models must never route a broker-backed gateway or
-	// shadow broker credentials. Format handlers ask `resolveModel` to translate
-	// a client-requested `model` field into a pi-ai `Model<Api>` before dispatch;
-	// `listModels` powers `/v1/models`.
+	// component the TUI/CLI use — scoped to providers we hold credentials for
+	// and, when configured, the deployment's explicit provider allowlist.
+	// `ignoreLocalModelConfig` prevents host-side overrides and custom models
+	// from shadowing broker-backed credentials.
+	const providerFilter = flags.providers && flags.providers.length > 0 ? new Set(flags.providers) : null;
 	const snapshot = storage.exportSnapshot();
 	const providersWithCreds = new Set<string>();
-	for (const entry of snapshot.credentials) providersWithCreds.add(entry.provider);
+	for (const entry of snapshot.credentials) {
+		if (providerFilter !== null && !providerFilter.has(entry.provider)) continue;
+		providersWithCreds.add(entry.provider);
+	}
+	if (providerFilter !== null && providersWithCreds.size === 0) {
+		throw new Error(
+			`Auth gateway provider filter matched no broker credentials: ${flags.providers?.join(", ") ?? ""}`,
+		);
+	}
 	const registry = new ModelRegistry(storage, undefined, { ignoreLocalModelConfig: true });
 	await registry.refresh();
 	let modelById = indexModelsByRequestId(registry.getAll(), providersWithCreds);

@@ -7,6 +7,7 @@ import pytest
 
 from robomp.github_events import (
     extract_mention,
+    is_direct_implementation_request,
     is_implementation_authorizer,
     is_maintainer,
     rate_limit_cap,
@@ -757,6 +758,36 @@ def test_route_directive_unset_for_maintainer_without_mention() -> None:
         bot_login=BOT,
     )
     assert decision.directive is False
+
+
+def test_is_direct_implementation_request_requires_explicit_action() -> None:
+    assert is_direct_implementation_request("Create a PR implementing this. This is authorized.")
+    assert is_direct_implementation_request("go ahead")
+    assert is_direct_implementation_request("fix this")
+    assert not is_direct_implementation_request("looks good to me")
+    assert not is_direct_implementation_request("thanks for the report")
+
+
+def test_route_directive_set_for_owner_direct_implementation_request_without_mention() -> None:
+    decision = route(
+        "issue_comment",
+        {
+            "action": "created",
+            "comment": {
+                "user": {"login": "can1357"},
+                "author_association": "OWNER",
+                "body": "Create a PR implementing this. This is authorized.",
+            },
+            "issue": {"number": 9},
+            "repository": {"full_name": "octo/widget"},
+        },
+        allowlist=ALLOWLIST,
+        bot_login=BOT,
+    )
+    assert decision.directive is True
+    assert decision.directive_body == "Create a PR implementing this. This is authorized."
+    assert decision.directive_author == "can1357"
+    assert decision.directive_authorizes_impl is True
 
 
 def test_route_directive_on_incoming_pr_conversation_is_ignored() -> None:
