@@ -421,6 +421,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 unlimited=cfg.rate_limit_unlimited | cfg.maintainer_logins,
                 default=cfg.rate_limit_default,
                 contributor=cfg.rate_limit_contributor,
+                trust_associations=cfg.rate_limit_trust_associations,
             )
             since = iso_seconds_ago(cfg.rate_limit_window_seconds)
             admission = db.admit_submission(

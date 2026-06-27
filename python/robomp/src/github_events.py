@@ -437,15 +437,20 @@ def rate_limit_cap(
     unlimited: frozenset[str],
     default: int,
     contributor: int,
+    trust_associations: bool = True,
 ) -> int | None:
     """Return the per-window submission cap for a submitter, or `None` for unlimited.
 
     Precedence: explicit `unlimited` allowlist > trusted GitHub association
     (`OWNER`/`MEMBER`/`COLLABORATOR`) > `CONTRIBUTOR` tier > default tier.
+
+    When `trust_associations` is False, GitHub `author_association` grants no
+    bypass or tier at all -- only the explicit `unlimited` allowlist exempts a
+    submitter, so even repo owners fall to the default cap.
     """
     if login.lower() in unlimited:
         return None
-    if association:
+    if trust_associations and association:
         upper = association.upper()
         if upper in TRUSTED_ASSOCIATIONS:
             return None
