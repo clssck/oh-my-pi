@@ -544,6 +544,36 @@ def test_rate_limit_cap_default_tier_for_unknown_and_first_timer() -> None:
         ), assoc
 
 
+def test_rate_limit_cap_no_association_trust_caps_owner() -> None:
+    # With trust_associations disabled, OWNER/MEMBER/COLLABORATOR/CONTRIBUTOR get
+    # no bypass or tier -- only the explicit allowlist exempts; everyone else falls
+    # to the default cap.
+    for assoc in ("OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"):
+        assert (
+            rate_limit_cap(
+                "owner",
+                assoc,
+                unlimited=frozenset(),
+                default=1,
+                contributor=10,
+                trust_associations=False,
+            )
+            == 1
+        ), assoc
+    # The explicit allowlist still exempts even when association trust is off.
+    assert (
+        rate_limit_cap(
+            "owner",
+            "OWNER",
+            unlimited=frozenset({"owner"}),
+            default=1,
+            contributor=10,
+            trust_associations=False,
+        )
+        is None
+    )
+
+
 # ---------- mention + directive ----------
 
 
