@@ -117,6 +117,11 @@ class Settings(BaseSettings):
     rate_limit_default: int = Field(3, alias="ROBOMP_RATE_LIMIT_DEFAULT")
     rate_limit_contributor: int = Field(10, alias="ROBOMP_RATE_LIMIT_CONTRIBUTOR")
     rate_limit_unlimited_raw: str = Field("", alias="ROBOMP_RATE_LIMIT_UNLIMITED")
+    # When False, GitHub `author_association` (OWNER/MEMBER/COLLABORATOR/CONTRIBUTOR)
+    # grants no rate-limit bypass or tier -- only `ROBOMP_RATE_LIMIT_UNLIMITED`
+    # exempts a submitter. Lets a deployment throttle even repo owners. Default
+    # True preserves the original association-trusting behavior.
+    rate_limit_trust_associations: bool = Field(True, alias="ROBOMP_RATE_LIMIT_TRUST_ASSOCIATIONS")
     # Logins (comma-separated, `@` prefix optional, case-insensitive) whose `@bot_login`
     # mentions are treated as authoritative directives. These accounts also
     # bypass rate limiting regardless of `author_association`.
