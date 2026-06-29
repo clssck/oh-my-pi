@@ -348,6 +348,34 @@ async def triage_issue(
     await run_task(task_kind="triage_issue", inputs=inputs)
 
 
+async def _ack_directive(
+    github: GitHubBackend,
+    repo: str,
+    number: int,
+    comment: CommentInfo | None,
+    directive: DirectiveInfo | None,
+) -> None:
+    """Post an immediate, contextual acknowledgment so the requester gets instant
+    feedback before the (potentially long) agent run. Deterministic and idempotent
+    via a hidden marker keyed to the triggering comment, so event retries never
+    spam duplicate acks; ack failures are logged and never abort the task."""
+    if directive is None or comment is None:
+        return
+    marker = f"robomp-ack:{comment.id}"
+    try:
+        existing = await github.list_comments(repo, number)
+        if any(marker in c.body for c in existing):
+            return
+        body = persona.directive_ack_comment(
+            author=directive.author,
+            request=directive.body,
+            comment_id=comment.id,
+        )
+        await github.post_comment(repo, number, body)
+    except Exception as exc:
+        log.warning("directive ack failed", extra={"key": issue_key(repo, number), "err": str(exc)})
+
+
 async def review_pr(
     *,
     settings: Settings,
@@ -444,6 +472,8 @@ async def handle_comment(
     directive = _directive_from_payload(payload)
     comment = _comment_from_payload(payload)
     clone_url = repo.clone_url
+    if directive is not None:
+        await _ack_directive(github, repo.full_name, issue.number, comment, directive)
 
     if existing is None:
         if directive is None:
@@ -745,6 +775,8 @@ async def handle_pr_conversation(
         except GitHubError as exc:
             log.warning("bare mention reply failed", extra={"err": str(exc)})
         return
+    if directive is not None:
+        await _ack_directive(github, repo_full, pr_number, _comment_from_payload(payload), directive)
     issue_number = issue_row.number if issue_row is not None else pr_number
     try:
         repo = await github.get_repo(repo_full)
