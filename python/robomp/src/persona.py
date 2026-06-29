@@ -367,6 +367,16 @@ def finalized_pr_comment() -> str:
     return _load("finalized_pr_comment.md").strip()
 
 
+def directive_ack_comment(*, author: str, request: str, comment_id: int) -> str:
+    snippet = " ".join(request.split())
+    if len(snippet) > 200:
+        snippet = snippet[:199].rstrip() + "…"
+    return render(
+        _load("ack_comment.md"),
+        {"author": author, "request": snippet, "comment_id": comment_id},
+    ).strip()
+
+
 def bare_mention_reply() -> str:
     return "What would you like me to do?"
 
@@ -387,6 +397,7 @@ def question_autoclose_suffix(hours: float) -> str:
 __all__ = [
     "classify_next_step",
     "directive",
+    "directive_ack_comment",
     "finalized_issue_comment",
     "finalized_pr_comment",
     "followup_comment",
