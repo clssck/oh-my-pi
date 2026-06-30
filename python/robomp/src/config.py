@@ -62,6 +62,19 @@ class Settings(BaseSettings):
     provider: str | None = Field(None, alias="ROBOMP_PROVIDER")
     thinking_level: ThinkingLevel = Field("high", alias="ROBOMP_THINKING")
 
+    # Dynamic directive acknowledgment. When enabled, robomp asks the in-stack
+    # gateway for a short, contextual "on it" reply (referencing the actual ask)
+    # BEFORE the agent run; any failure falls back to the static template. OFF by
+    # default so standalone installs (no `gateway` service) don't pay a timeout
+    # per directive — the robomp deploy command sets ROBOMP_ACK_DYNAMIC=true.
+    ack_dynamic: bool = Field(False, alias="ROBOMP_ACK_DYNAMIC")
+    ack_model: str = Field("openai-codex/gpt-5.5", alias="ROBOMP_ACK_MODEL")
+    ack_gateway_chat_url: str = Field(
+        "http://gateway:4000/v1/chat/completions", alias="ROBOMP_ACK_GATEWAY_URL"
+    )
+    ack_timeout_seconds: float = Field(20.0, alias="ROBOMP_ACK_TIMEOUT_SECONDS")
+    ack_max_tokens: int = Field(300, alias="ROBOMP_ACK_MAX_TOKENS")
+
     # Runtime
     max_concurrency: int = Field(8, alias="ROBOMP_MAX_CONCURRENCY")
     task_timeout_seconds: float = Field(2400.0, alias="ROBOMP_TASK_TIMEOUT_SECONDS")
