@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable, Mapping
 from typing import Any, TypeVar
+
+import httpx
 
 from robomp import persona
 from robomp.config import Settings
@@ -348,17 +351,62 @@ async def triage_issue(
     await run_task(task_kind="triage_issue", inputs=inputs)
 
 
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+def _sanitize_ack(text: str | None) -> str | None:
+    """Treat model output as untrusted: strip HTML comments and any forged
+    `robomp-ack` marker, drop a wrapping code fence, cap length. None if nothing
+    usable remains (caller falls back to the static template)."""
+    if not isinstance(text, str):
+        return None
+    cleaned = _HTML_COMMENT_RE.sub("", text).replace("robomp-ack", "").strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`").strip()
+    if not cleaned:
+        return None
+    if len(cleaned) > 1200:
+        cleaned = cleaned[:1199].rstrip() + "…"
+    return cleaned
+
+
+async def _generate_ack_text(settings: Settings, *, title: str, author: str, request: str) -> str | None:
+    """Best-effort short, contextual ack from the in-stack gateway. Returns
+    sanitized text, or None on any error/timeout so the caller falls back."""
+    payload = {
+        "model": settings.ack_model,
+        "messages": [
+            {"role": "system", "content": persona.ack_system_prompt()},
+            {"role": "user", "content": persona.ack_user_prompt(title=title, author=author, request=request)},
+        ],
+        "max_tokens": settings.ack_max_tokens,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=settings.ack_timeout_seconds) as client:
+            resp = await client.post(settings.ack_gateway_chat_url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+        return _sanitize_ack(data["choices"][0]["message"]["content"])
+    except Exception as exc:
+        log.warning("dynamic ack generation failed; using static fallback", extra={"err": str(exc)})
+        return None
+
+
 async def _ack_directive(
     github: GitHubBackend,
     repo: str,
     number: int,
     comment: CommentInfo | None,
     directive: DirectiveInfo | None,
+    *,
+    settings: Settings | None = None,
+    title: str = "",
 ) -> None:
-    """Post an immediate, contextual acknowledgment so the requester gets instant
-    feedback before the (potentially long) agent run. Deterministic and idempotent
-    via a hidden marker keyed to the triggering comment, so event retries never
-    spam duplicate acks; ack failures are logged and never abort the task."""
+    """Post an immediate acknowledgment before the (long) agent run. When
+    `settings.ack_dynamic` is set, ask the gateway for a short contextual reply
+    referencing the actual ask; otherwise (or on any failure) fall back to the
+    static template. Idempotent via a hidden marker keyed to the triggering
+    comment; ack failures are logged and never abort the task."""
     if directive is None or comment is None:
         return
     marker = f"robomp-ack:{comment.id}"
@@ -366,11 +414,17 @@ async def _ack_directive(
         existing = await github.list_comments(repo, number)
         if any(marker in c.body for c in existing):
             return
-        body = persona.directive_ack_comment(
-            author=directive.author,
-            request=directive.body,
-            comment_id=comment.id,
-        )
+        body: str | None = None
+        if settings is not None and settings.ack_dynamic:
+            text = await _generate_ack_text(
+                settings, title=title, author=directive.author, request=directive.body
+            )
+            if text:
+                body = persona.directive_ack_dynamic(text=text, comment_id=comment.id)
+        if body is None:
+            body = persona.directive_ack_comment(
+                author=directive.author, request=directive.body, comment_id=comment.id
+            )
         await github.post_comment(repo, number, body)
     except Exception as exc:
         log.warning("directive ack failed", extra={"key": issue_key(repo, number), "err": str(exc)})
@@ -473,7 +527,7 @@ async def handle_comment(
     comment = _comment_from_payload(payload)
     clone_url = repo.clone_url
     if directive is not None:
-        await _ack_directive(github, repo.full_name, issue.number, comment, directive)
+        await _ack_directive(github, repo.full_name, issue.number, comment, directive, settings=settings, title=issue.title)
 
     if existing is None:
         if directive is None:
@@ -776,7 +830,7 @@ async def handle_pr_conversation(
             log.warning("bare mention reply failed", extra={"err": str(exc)})
         return
     if directive is not None:
-        await _ack_directive(github, repo_full, pr_number, _comment_from_payload(payload), directive)
+        await _ack_directive(github, repo_full, pr_number, _comment_from_payload(payload), directive, settings=settings)
     issue_number = issue_row.number if issue_row is not None else pr_number
     try:
         repo = await github.get_repo(repo_full)
