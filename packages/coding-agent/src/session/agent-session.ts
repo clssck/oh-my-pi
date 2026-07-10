@@ -2156,7 +2156,8 @@ export class AgentSession {
 				if (detection) this.#maybeInjectToolCallLoopRedirect(messages, detection);
 			}
 			this.#advisorPrimaryTurnsCompleted++;
-			if (this.#advisors.length > 0) {
+			const deferAdvisorReview = this.settings.get("advisor.coalesceToolTurns") && context?.willContinue === true;
+			if (this.#advisors.length > 0 && !deferAdvisorReview) {
 				for (const a of this.#advisors) {
 					if (!a.runtime.disposed) a.runtime.onTurnEnd(messages);
 				}

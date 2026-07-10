@@ -427,6 +427,18 @@ export const SETTINGS_SCHEMA = {
 			condition: "advisorEnabled",
 		},
 	},
+	"advisor.coalesceToolTurns": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "model",
+			group: "Advisor",
+			label: "Coalesce Tool-Loop Reviews",
+			description:
+				"Review a completed primary tool loop in one advisor request instead of reviewing every tool continuation. Delays new advisor findings until the loop yields.",
+			condition: "advisorEnabled",
+		},
+	},
 	"advisor.immuneTurns": {
 		type: "number",
 		default: 3,
