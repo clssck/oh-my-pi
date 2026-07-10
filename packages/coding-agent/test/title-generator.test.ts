@@ -352,33 +352,14 @@ describe("title generator", () => {
 		expect(title).toBe("Refactor API client error handling");
 	});
 
-	it("resolves the model roles in precedence order: tiny -> commit -> smol", async () => {
+	it("resolves online title roles in precedence order: tiny -> smol, ignoring commit", async () => {
 		const tinyModel = getModelOrThrow("claude-haiku-4-5");
 		const commitModel = getModelOrThrow("claude-sonnet-4-5");
 		const smolModel = getModelOrThrow("claude-opus-4-8");
-
-		const mockComplete = vi.spyOn(ai, "completeSimple").mockResolvedValue({
+		const completeSimpleMock = vi.spyOn(ai, "completeSimple").mockResolvedValue({
 			stopReason: "stop",
 			content: [{ type: "text", text: "<title>Test Title</title>" }],
 		} as never);
-
-		// Case 1: All three roles configured. 'tiny' should be used.
-		let currentSettings = {
-			get(path: string) {
-				if (path === "providers.tinyModel") return "online";
-				return undefined;
-			},
-			getModelRole(role: string) {
-				if (role === "tiny") return `${tinyModel.provider}/${tinyModel.id}`;
-				if (role === "commit") return `${commitModel.provider}/${commitModel.id}`;
-				if (role === "smol") return `${smolModel.provider}/${smolModel.id}`;
-				return undefined;
-			},
-			getStorage() {
-				return undefined;
-			},
-		} as never;
-
 		const registry = {
 			getAvailable: () => [tinyModel, commitModel, smolModel],
 			getApiKey: async () => "test-key",
@@ -386,52 +367,60 @@ describe("title generator", () => {
 			authStorage: { rotateSessionCredential: async () => false },
 			resolver: () => async () => "test-key",
 		} as never;
-
-		await generateSessionTitle("Some message", registry, currentSettings);
-		expect(mockComplete).toHaveBeenCalled();
-		expect(mockComplete.mock.calls[0]?.[0]).toBe(tinyModel);
-
-		mockComplete.mockClear();
-
-		// Case 2: 'tiny' role not configured, 'commit' and 'smol' configured. 'commit' should be used.
-		currentSettings = {
+		let roleModels: Record<string, Model<Api> | undefined> = {
+			tiny: tinyModel,
+			commit: commitModel,
+			smol: smolModel,
+		};
+		const settings = {
 			get(path: string) {
 				if (path === "providers.tinyModel") return "online";
 				return undefined;
 			},
 			getModelRole(role: string) {
-				if (role === "commit") return `${commitModel.provider}/${commitModel.id}`;
-				if (role === "smol") return `${smolModel.provider}/${smolModel.id}`;
-				return undefined;
+				const model = roleModels[role];
+				return model ? `${model.provider}/${model.id}` : undefined;
 			},
 			getStorage() {
 				return undefined;
 			},
 		} as never;
 
-		await generateSessionTitle("Some message", registry, currentSettings);
-		expect(mockComplete).toHaveBeenCalled();
-		expect(mockComplete.mock.calls[0]?.[0]).toBe(commitModel);
+		await generateSessionTitle("Some message", registry, settings);
+		roleModels = { commit: commitModel, smol: smolModel };
+		await generateSessionTitle("Some message", registry, settings);
 
-		mockComplete.mockClear();
+		expect(completeSimpleMock).toHaveBeenCalledTimes(2);
+		expect(completeSimpleMock.mock.calls.map(([model]) => model)).toEqual([tinyModel, smolModel]);
+	});
 
-		// Case 3: Only 'smol' role configured. 'smol' should be used.
-		currentSettings = {
+	it("does not use commit or the current model without a tiny or smol online title role", async () => {
+		const commitModel = getModelOrThrow("claude-sonnet-4-5");
+		const currentModel = getModelOrThrow("claude-opus-4-8");
+		const completeSimpleMock = vi.spyOn(ai, "completeSimple");
+		const settings = {
 			get(path: string) {
 				if (path === "providers.tinyModel") return "online";
 				return undefined;
 			},
 			getModelRole(role: string) {
-				if (role === "smol") return `${smolModel.provider}/${smolModel.id}`;
-				return undefined;
+				return role === "commit" ? `${commitModel.provider}/${commitModel.id}` : undefined;
 			},
 			getStorage() {
 				return undefined;
 			},
 		} as never;
+		const registry = {
+			getAvailable: () => [commitModel, currentModel],
+			getApiKey: async () => "test-key",
+			getApiKeyForProvider: async () => "test-key",
+			authStorage: { rotateSessionCredential: async () => false },
+			resolver: () => async () => "test-key",
+		} as never;
 
-		await generateSessionTitle("Some message", registry, currentSettings);
-		expect(mockComplete).toHaveBeenCalled();
-		expect(mockComplete.mock.calls[0]?.[0]).toBe(smolModel);
+		const title = await generateSessionTitle("Some message", registry, settings, undefined, currentModel);
+
+		expect(title).toBeNull();
+		expect(completeSimpleMock).not.toHaveBeenCalled();
 	});
 });

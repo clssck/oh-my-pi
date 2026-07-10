@@ -34,16 +34,13 @@ const TITLE_MAX_TOKENS = 1024;
 /** Matches the title the model wraps in `<title>...</title>`. */
 const TITLE_MARKER_RE = /<title>([\s\S]*?)<\/title>/i;
 
-function getTitleModel(registry: ModelRegistry, settings: Settings, currentModel?: Model<Api>): Model<Api> | undefined {
+function getTitleModel(registry: ModelRegistry, settings: Settings): Model<Api> | undefined {
 	const availableModels = registry.getAvailable();
 	if (availableModels.length === 0) return undefined;
 
-	const titleModel = resolveRoleSelection(["tiny", "commit", "smol"], settings, availableModels)?.model;
-	if (titleModel) return titleModel;
-
-	if (currentModel) return currentModel;
-
-	return undefined;
+	// Online titles are nonessential side work: require an explicit tiny/smol
+	// role instead of falling through commit or the active session model.
+	return resolveRoleSelection(["tiny", "smol"], settings, availableModels)?.model;
 }
 
 /**
@@ -53,7 +50,7 @@ function getTitleModel(registry: ModelRegistry, settings: Settings, currentModel
  * @param registry Model registry
  * @param settings Settings used to resolve the smol role
  * @param sessionId Optional session id for sticky API key selection
- * @param currentModel Current model (used to derive title model)
+ * @param currentModel Retained for positional API compatibility; never used as an online-title fallback
  * @param metadataResolver Optional resolver evaluated after credential selection
  *   to produce request metadata (e.g. user_id for session attribution). Using a
  *   resolver instead of a pre-evaluated value ensures the metadata's account_uuid
@@ -135,12 +132,12 @@ export async function generateTitleOnline(
 	registry: ModelRegistry,
 	settings: Settings,
 	sessionId?: string,
-	currentModel?: Model<Api>,
+	_currentModel?: Model<Api>,
 	metadataResolver?: (provider: string) => Record<string, unknown> | undefined,
 	signal?: AbortSignal,
 	customSystemPrompt?: string,
 ): Promise<string | null> {
-	const model = getTitleModel(registry, settings, currentModel);
+	const model = getTitleModel(registry, settings);
 	if (!model) {
 		logger.warn("title-generator: no title model found", { sessionId, reason: "no-title-model" });
 		return null;
