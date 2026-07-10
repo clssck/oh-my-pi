@@ -3,7 +3,11 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { DEFAULT_FUZZY_THRESHOLD, executePatchSingle } from "@oh-my-pi/pi-coding-agent/edit";
+import {
+	DEFAULT_FUZZY_THRESHOLD,
+	type ExecutePatchSingleOptions,
+	executePatchSingle,
+} from "@oh-my-pi/pi-coding-agent/edit";
 import type { FileDiagnosticsResult } from "@oh-my-pi/pi-coding-agent/lsp";
 import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import { removeWithRetries } from "@oh-my-pi/pi-utils";
@@ -85,6 +89,8 @@ describe("executePatchSingle — post-write verification error path", () => {
 		// double-embeds the path when the outer composer prepends its own.
 		// resolvedPath still lives in the structured `context` metadata.
 		expect(message).not.toContain(tempDir);
+		expect(message).toContain("Next action: read deep/nested/foo.txt:1+5");
+		expect(message).toContain("Do NOT retry this exact payload unchanged");
 	});
 
 	test("ToolError still carries the absolute resolvedPath in its structured context for log correlation", async () => {
@@ -109,5 +115,39 @@ describe("executePatchSingle — post-write verification error path", () => {
 		expect(caught).toBeInstanceOf(Error);
 		const context = (caught as Error & { context?: { path?: string } }).context;
 		expect(context?.path).toBe(path.join(tempDir, relPath));
+	});
+	test("second identical unchanged-write payload escalates to a hard loop error", async () => {
+		const relPath = "foo.txt";
+		await fs.writeFile(path.join(tempDir, relPath), "a\n");
+		const options: ExecutePatchSingleOptions = {
+			session: makeSession(tempDir),
+			path: relPath,
+			params: { op: "update", diff: "@@\n-a\n+b" },
+			allowFuzzy: true,
+			fuzzyThreshold: DEFAULT_FUZZY_THRESHOLD,
+			writethrough: silentlySwallowingWritethrough,
+			beginDeferredDiagnosticsForPath: noopBeginDeferred,
+		};
+
+		let first: Error | undefined;
+		try {
+			await executePatchSingle(options);
+		} catch (error) {
+			first = error as Error;
+		}
+		let second: Error | undefined;
+		try {
+			await executePatchSingle(options);
+		} catch (error) {
+			second = error as Error;
+		}
+
+		expect(first?.message).toContain("Do NOT retry this exact payload unchanged");
+		expect(second?.message).toStartWith("STOP.");
+		expect(second?.message).toContain("failed 2 times in a row");
+		expect(second?.message).toContain("Cease re-issuing this payload");
+		expect(second?.message).toContain(relPath);
+		expect(second?.message).not.toContain(tempDir);
+		expect(await fs.readFile(path.join(tempDir, relPath), "utf8")).toBe("a\n");
 	});
 });

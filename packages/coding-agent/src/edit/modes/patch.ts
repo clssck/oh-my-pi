@@ -37,6 +37,16 @@ import {
 	parseDiffHunks,
 } from "../diff";
 import {
+	formatAmbiguousEditFailureMessage,
+	formatEditFailureLoopDiagnostic,
+	formatEditFailureMessage,
+	formatFailureLines,
+	formatPatchUnchangedMessage,
+	sanitizeFailureLine,
+	selectLineWindow,
+} from "../failure-message";
+import { hashPatchInput, recordFailedEdit, resetFailedEdit } from "../hashline/noop-loop-guard";
+import {
 	adjustIndentation,
 	convertLeadingTabsToSpaces,
 	countLeadingWhitespace,
@@ -97,6 +107,10 @@ export interface ApplyPatchOptions {
 	fuzzyThreshold?: number;
 	allowFuzzy?: boolean;
 	fs?: FileSystem;
+	/** Caller-supplied source path used only in display messages. */
+	displayPath?: string;
+	/** Caller-supplied rename destination used only in display messages. */
+	displayRename?: string;
 	/**
 	 * Permit `op: "create"` to replace an existing file (full-file overwrite).
 	 * The JSON `patch` edit mode sanctions create-as-overwrite for major
@@ -621,7 +635,7 @@ function formatSequenceMatchPreview(lines: string[], startIdx: number): string {
 		.map((line, i) => {
 			const num = start + i + 1;
 			const truncated = line.length > MATCH_PREVIEW_MAX_LEN ? `${line.slice(0, MATCH_PREVIEW_MAX_LEN - 1)}…` : line;
-			return `  ${num} | ${truncated}`;
+			return sanitizeFailureLine(`  ${num} | ${truncated}`);
 		})
 		.join("\n");
 }
@@ -959,31 +973,73 @@ function applyCharacterMatch(
 
 	// Check for multiple exact occurrences
 	if (matchOutcome.occurrences && matchOutcome.occurrences > 1) {
-		const previews = matchOutcome.occurrencePreviews?.join("\n\n") ?? "";
+		const contentLines = normalizedContent.split("\n");
 		const moreMsg = matchOutcome.occurrences > 5 ? ` (showing first 5 of ${matchOutcome.occurrences})` : "";
 		throw new ApplyPatchError(
-			`Found ${matchOutcome.occurrences} occurrences in ${path}${moreMsg}:\n\n${previews}\n\n` +
-				`Add more context lines to disambiguate.`,
+			formatAmbiguousEditFailureMessage({
+				path,
+				why: `Found ${matchOutcome.occurrences} occurrences in ${path}${moreMsg}; the edit is ambiguous.`,
+				expectedLines: oldText.split("\n"),
+				candidatePreviews: matchOutcome.occurrencePreviews,
+				readStartLine: matchOutcome.occurrenceLines?.[0] ?? 1,
+				totalLines: contentLines.length,
+			}),
 		);
 	}
 
 	if (matchOutcome.fuzzyMatches && matchOutcome.fuzzyMatches > 1) {
+		const contentLines = normalizedContent.split("\n");
+		const closestWindow = matchOutcome.closest
+			? selectLineWindow(contentLines, matchOutcome.closest.startLine)
+			: undefined;
 		throw new ApplyPatchError(
-			`Found ${matchOutcome.fuzzyMatches} high-confidence matches in ${path}. ` +
-				`The text must be unique. Please provide more context to make it unique.`,
+			formatAmbiguousEditFailureMessage({
+				path,
+				why: `Found ${matchOutcome.fuzzyMatches} high-confidence matches in ${path}; the text must be unique.`,
+				expectedLines: oldText.split("\n"),
+				candidatePreviews: closestWindow
+					? [formatFailureLines(closestWindow.startLine, closestWindow.lines)]
+					: undefined,
+				readStartLine: closestWindow?.startLine ?? 1,
+				readLineCount: closestWindow?.lines.length,
+				totalLines: contentLines.length,
+			}),
 		);
 	}
 
 	if (!matchOutcome.match) {
 		const closest = matchOutcome.closest;
+		const contentLines = normalizedContent.split("\n");
+		const expectedLines = oldText.split("\n");
 		if (closest) {
 			const similarity = Math.round(closest.confidence * 100);
+			const closestWindow = selectLineWindow(contentLines, closest.startLine);
 			throw new ApplyPatchError(
-				`Could not find a close enough match in ${path}. ` +
-					`Closest match (${similarity}% similar) at line ${closest.startLine}.`,
+				formatEditFailureMessage({
+					path,
+					why: `Could not find a close enough match in ${path}.`,
+					expectedLines,
+					closestActualLines: closestWindow.lines,
+					closestLine: closest.startLine,
+					closestActualStartLine: closestWindow.startLine,
+					actualDiffLines: closest.actualText.split("\n"),
+					actualDiffStartLine: closest.startLine,
+					similarity,
+					readStartLine: closestWindow.startLine,
+					readLineCount: closestWindow.lines.length,
+					totalLines: contentLines.length,
+				}),
 			);
 		}
-		throw new ApplyPatchError(`Failed to find expected lines in ${path}:\n${oldText}`);
+		throw new ApplyPatchError(
+			formatEditFailureMessage({
+				path,
+				why: `Failed to find expected lines in ${path}.`,
+				expectedLines,
+				readStartLine: 1,
+				totalLines: contentLines.length,
+			}),
+		);
 	}
 
 	// Adjust indentation to match what was actually found
@@ -1046,10 +1102,21 @@ function assertPartialMatchPreservesDiscardedText(
 			if (part.length === 0) continue;
 			newLinesNorm ??= newLines.map(normalizeForFuzzy).join("\n");
 			if (!newLinesNorm.includes(part)) {
+				const actualLine = matchStartIndex + j + 1;
 				throw new ApplyPatchError(
-					`Refusing partial-line match in ${path} at line ${matchStartIndex + j + 1}: ` +
-						`the file line also contains ${JSON.stringify(part)}, which the replacement would silently drop. ` +
-						`Provide the complete line in the hunk.`,
+					formatEditFailureMessage({
+						path,
+						why: `Refusing a partial-line match in ${path} because the replacement would drop unmatched content.`,
+						expectedLines: [pattern[j]],
+						closestActualLines: [matchedLines[j]],
+						closestLine: actualLine,
+						closestActualStartLine: actualLine,
+						actualDiffLines: [matchedLines[j]],
+						actualDiffStartLine: actualLine,
+						readStartLine: actualLine,
+						readLineCount: 1,
+						nextAction: `Recovery: call read(path=${JSON.stringify(path)}, selector=${JSON.stringify(`${actualLine}+1`)}).\nThen provide the complete line in a changed hunk.`,
+					}),
 				);
 			}
 		}
@@ -1107,21 +1174,45 @@ function computeReplacements(
 				if (fallback !== undefined) {
 					lineIndex = fallback;
 				} else if (result.matchCount !== undefined && result.matchCount > 1) {
-					const displayContext = hunk.changeContext.includes("\n")
-						? hunk.changeContext.split("\n").pop()
-						: hunk.changeContext;
+					const contextLines = hunk.changeContext.split("\n");
 					const previews = formatSequenceMatchPreviews(originalLines, result.matchIndices, result.matchCount);
 					const strategyHint = result.strategy ? ` Matching strategy: ${result.strategy}.` : "";
-					const previewText = previews ? `\n\n${previews}` : "";
 					throw new ApplyPatchError(
-						`Found ${result.matchCount} matches for context '${displayContext}' in ${path}.${strategyHint}` +
-							`${previewText}\n\nAdd more surrounding context or additional @@ anchors to make it unique.`,
+						formatAmbiguousEditFailureMessage({
+							path,
+							why: `Found ${result.matchCount} matches for patch context in ${path}.${strategyHint}`,
+							expectedLines: contextLines,
+							candidatePreviews: previews ? [previews] : undefined,
+							readStartLine:
+								result.matchIndices?.[0] !== undefined ? result.matchIndices[0] + 1 : (lineHint ?? 1),
+							totalLines: originalLines.length,
+						}),
 					);
 				} else {
-					const displayContext = hunk.changeContext.includes("\n")
-						? hunk.changeContext.split("\n").join(" > ")
-						: hunk.changeContext;
-					throw new ApplyPatchError(`Failed to find context '${displayContext}' in ${path}`);
+					const contextLines = hunk.changeContext.split("\n");
+					const closestNeedle = contextLines[contextLines.length - 1] ?? hunk.changeContext;
+					const closest = findClosestSequenceMatch(originalLines, [closestNeedle], { start: lineIndex });
+					const closestWindow =
+						closest.index !== undefined && closest.confidence > 0
+							? selectLineWindow(originalLines, closest.index + 1)
+							: undefined;
+					throw new ApplyPatchError(
+						formatEditFailureMessage({
+							path,
+							why: `Failed to find patch context in ${path}.`,
+							expectedLines: contextLines,
+							expectedDiffLines: [closestNeedle],
+							closestActualLines: closestWindow?.lines,
+							closestLine: closest.index !== undefined ? closest.index + 1 : undefined,
+							closestActualStartLine: closestWindow?.startLine,
+							actualDiffLines: closest.index !== undefined ? [originalLines[closest.index] ?? ""] : undefined,
+							actualDiffStartLine: closest.index !== undefined ? closest.index + 1 : undefined,
+							similarity: Math.round(closest.confidence * 100),
+							readStartLine: closestWindow?.startLine ?? Math.max(1, lineHint ?? lineIndex + 1),
+							readLineCount: closestWindow?.lines.length,
+							totalLines: originalLines.length,
+						}),
+					);
 				}
 			} else {
 				// If oldLines[0] matches the final context, start search at idx (not idx+1)
@@ -1276,10 +1367,18 @@ function computeReplacements(
 					searchResult.matchCount,
 				);
 				const strategyHint = searchResult.strategy ? ` Matching strategy: ${searchResult.strategy}.` : "";
-				const previewText = previews ? `\n\n${previews}` : "";
 				throw new ApplyPatchError(
-					`Found ${searchResult.matchCount} matches for the text in ${path}.${strategyHint}` +
-						`${previewText}\n\nAdd more surrounding context or additional @@ anchors to make it unique.`,
+					formatAmbiguousEditFailureMessage({
+						path,
+						why: `Found ${searchResult.matchCount} matches for the text in ${path}.${strategyHint}`,
+						expectedLines: hunk.oldLines,
+						candidatePreviews: previews ? [previews] : undefined,
+						readStartLine:
+							searchResult.matchIndices?.[0] !== undefined
+								? searchResult.matchIndices[0] + 1
+								: Math.max(1, lineIndex + 1),
+						totalLines: originalLines.length,
+					}),
 				);
 			}
 			const closest = findClosestSequenceMatch(originalLines, pattern, {
@@ -1288,13 +1387,33 @@ function computeReplacements(
 			});
 			if (closest.index !== undefined && closest.confidence > 0) {
 				const similarity = Math.round(closest.confidence * 100);
-				const preview = formatSequenceMatchPreview(originalLines, closest.index);
+				const closestWindow = selectLineWindow(originalLines, closest.index + 1);
 				throw new ApplyPatchError(
-					`Failed to find expected lines in ${path}:\n${hunk.oldLines.join("\n")}\n\n` +
-						`Closest match (${similarity}% similar) near line ${closest.index + 1}:\n${preview}`,
+					formatEditFailureMessage({
+						path,
+						why: `Failed to find expected lines in ${path}.`,
+						expectedLines: hunk.oldLines,
+						closestActualLines: closestWindow.lines,
+						closestLine: closest.index + 1,
+						closestActualStartLine: closestWindow.startLine,
+						actualDiffLines: originalLines.slice(closest.index, closest.index + pattern.length),
+						actualDiffStartLine: closest.index + 1,
+						similarity,
+						readStartLine: closestWindow.startLine,
+						readLineCount: closestWindow.lines.length,
+						totalLines: originalLines.length,
+					}),
 				);
 			}
-			throw new ApplyPatchError(`Failed to find expected lines in ${path}:\n${hunk.oldLines.join("\n")}`);
+			throw new ApplyPatchError(
+				formatEditFailureMessage({
+					path,
+					why: `Failed to find expected lines in ${path}.`,
+					expectedLines: hunk.oldLines,
+					readStartLine: Math.max(1, lineHint ?? lineIndex + 1),
+					totalLines: originalLines.length,
+				}),
+			);
 		}
 
 		const found = searchResult.index;
@@ -1324,10 +1443,18 @@ function computeReplacements(
 				searchResult.matchCount,
 			);
 			const strategyHint = searchResult.strategy ? ` Matching strategy: ${searchResult.strategy}.` : "";
-			const previewText = previews ? `\n\n${previews}` : "";
 			throw new ApplyPatchError(
-				`Found ${searchResult.matchCount} matches for the text in ${path}.${strategyHint}` +
-					`${previewText}\n\nAdd more surrounding context or additional @@ anchors to make it unique.`,
+				formatAmbiguousEditFailureMessage({
+					path,
+					why: `Found ${searchResult.matchCount} matches for the text in ${path}.${strategyHint}`,
+					expectedLines: hunk.oldLines,
+					candidatePreviews: previews ? [previews] : undefined,
+					readStartLine:
+						searchResult.matchIndices?.[0] !== undefined
+							? searchResult.matchIndices[0] + 1
+							: Math.max(1, found + 1),
+					totalLines: originalLines.length,
+				}),
 			);
 		}
 
@@ -1340,8 +1467,14 @@ function computeReplacements(
 				const preview1 = formatSequenceMatchPreview(originalLines, found);
 				const preview2 = formatSequenceMatchPreview(originalLines, secondMatch.index);
 				throw new ApplyPatchError(
-					`Found 2 occurrences in ${path}:\n\n${preview1}\n\n${preview2}\n\n` +
-						`Add more context lines to disambiguate.`,
+					formatAmbiguousEditFailureMessage({
+						path,
+						why: `Found 2 occurrences in ${path}; the edit is ambiguous.`,
+						expectedLines: pattern,
+						candidatePreviews: [preview1, preview2],
+						readStartLine: found + 1,
+						totalLines: originalLines.length,
+					}),
 				);
 			}
 		}
@@ -1491,6 +1624,8 @@ async function applyNormalizedPatch(input: PatchInput, options: ApplyPatchOption
 		fuzzyThreshold = DEFAULT_FUZZY_THRESHOLD,
 		allowFuzzy = true,
 		allowCreateOverwrite = false,
+		displayPath = input.path,
+		displayRename = input.rename,
 	} = options;
 
 	const resolvePath = (p: string): string => resolveToCwd(p, cwd);
@@ -1508,7 +1643,7 @@ async function applyNormalizedPatch(input: PatchInput, options: ApplyPatchOption
 		// really need to replace the destination must delete it in an
 		// earlier hunk.
 		if (await fs.exists(destPath)) {
-			throw new ApplyPatchError(`Cannot rename ${input.path} to ${input.rename}: destination already exists.`);
+			throw new ApplyPatchError(`Cannot rename ${displayPath} to ${displayRename}: destination already exists.`);
 		}
 	}
 
@@ -1525,7 +1660,7 @@ async function applyNormalizedPatch(input: PatchInput, options: ApplyPatchOption
 		// where `op: "create"` doubles as a sanctioned full-file overwrite.
 		if (!allowCreateOverwrite && (await fs.exists(absolutePath))) {
 			throw new ApplyPatchError(
-				`Cannot create ${input.path}: file already exists. Use *** Update File to modify it in place.`,
+				`Cannot create ${displayPath}: file already exists. Use *** Update File to modify it in place.`,
 			);
 		}
 		// Strip + prefixes if present (handles diffs formatted as additions)
@@ -1551,7 +1686,7 @@ async function applyNormalizedPatch(input: PatchInput, options: ApplyPatchOption
 
 	// Handle DELETE operation
 	if (op === "delete") {
-		const oldContent = await readExistingPatchFile(fs, absolutePath, input.path);
+		const oldContent = await readExistingPatchFile(fs, absolutePath, displayPath);
 		if (!dryRun) {
 			await fs.delete(absolutePath);
 		}
@@ -1570,7 +1705,7 @@ async function applyNormalizedPatch(input: PatchInput, options: ApplyPatchOption
 		throw new ApplyPatchError("Update operation requires diff (hunks)");
 	}
 
-	const originalContent = await readExistingPatchFile(fs, absolutePath, input.path);
+	const originalContent = await readExistingPatchFile(fs, absolutePath, displayPath);
 	const { bom: bomFromText, text: strippedContent } = stripBom(originalContent);
 	let bom = bomFromText;
 	if (!bom && fs.readBinary) {
@@ -1589,7 +1724,7 @@ async function applyNormalizedPatch(input: PatchInput, options: ApplyPatchOption
 
 	const { content: newContent, warnings } = applyHunksToContent(
 		normalizedContent,
-		input.path,
+		displayPath,
 		hunks,
 		fuzzyThreshold,
 		allowFuzzy,
@@ -1684,6 +1819,7 @@ export interface ExecutePatchSingleOptions {
 	session: ToolSession;
 	path: string;
 	params: PatchEditEntry;
+	payloadHash?: string;
 	signal?: AbortSignal;
 	batchRequest?: LspBatchRequest;
 	allowFuzzy: boolean;
@@ -1793,6 +1929,32 @@ function mergeDiagnosticsWithWarnings(
 	};
 }
 
+function guardedPatchFailure(options: {
+	session: ToolSession;
+	resolvedPath: string;
+	path: string;
+	payloadHash: string;
+	message: string;
+	errorKind: "patch" | "tool";
+	context?: Record<string, unknown>;
+}): ApplyPatchError | ToolError {
+	const { count, escalate } = recordFailedEdit(options.session, options.resolvedPath, options.payloadHash);
+	if (escalate) {
+		return new ToolError(
+			formatEditFailureLoopDiagnostic({
+				path: options.path,
+				count,
+				reason: options.message,
+			}),
+			options.context,
+		);
+	}
+	if (options.errorKind === "tool") {
+		return new ToolError(options.message, options.context);
+	}
+	return new ApplyPatchError(options.message);
+}
+
 export async function executePatchSingle(
 	options: ExecutePatchSingleOptions,
 ): Promise<AgentToolResult<EditToolDetails, typeof patchEditEntrySchema>> {
@@ -1800,6 +1962,7 @@ export async function executePatchSingle(
 		session,
 		path,
 		params,
+		payloadHash,
 		signal,
 		batchRequest,
 		allowFuzzy,
@@ -1815,6 +1978,7 @@ export async function executePatchSingle(
 	enforcePlanModeWrite(session, path, { op, move: rename });
 	const resolvedPath = resolvePlanPath(session, path);
 	const resolvedRename = rename ? resolvePlanPath(session, rename) : undefined;
+	const effectivePayloadHash = payloadHash ?? hashPatchInput(JSON.stringify({ path, params }));
 
 	await assertEditableFile(resolvedPath, path);
 
@@ -1845,13 +2009,30 @@ export async function executePatchSingle(
 		batchRequest,
 		beginDeferredDiagnosticsForPath,
 	);
-	const result = await applyPatch(input, {
-		cwd: session.cwd,
-		fs: patchFileSystem,
-		fuzzyThreshold,
-		allowFuzzy,
-		allowCreateOverwrite,
-	});
+	let result: ApplyPatchResult;
+	try {
+		result = await applyPatch(input, {
+			cwd: session.cwd,
+			fs: patchFileSystem,
+			fuzzyThreshold,
+			allowFuzzy,
+			allowCreateOverwrite,
+			displayPath: path,
+			displayRename: rename,
+		});
+	} catch (err) {
+		if (err instanceof ApplyPatchError) {
+			throw guardedPatchFailure({
+				session,
+				resolvedPath,
+				path,
+				payloadHash: effectivePayloadHash,
+				message: err.message,
+				errorKind: "patch",
+			});
+		}
+		throw err;
+	}
 
 	// Post-write verification: only meaningful for in-place updates where the
 	// patch actually changes content and the file is not being renamed away.
@@ -1874,11 +2055,21 @@ export async function executePatchSingle(
 			postEditContent.length === preEditContent.length &&
 			postEditContent.every((b, i) => b === preEditContent[i]);
 		if (unchanged) {
-			throw new ToolError(`edit appeared successful but file content did not change on disk: ${path}`, {
-				path: resolvedPath,
+			const message = formatPatchUnchangedMessage(path);
+			throw guardedPatchFailure({
+				session,
+				resolvedPath,
+				path,
+				payloadHash: effectivePayloadHash,
+				message,
+				errorKind: "tool",
+				context: { path: resolvedPath },
 			});
 		}
 	}
+
+	resetFailedEdit(session, resolvedPath);
+	if (resolvedRename) resetFailedEdit(session, resolvedRename);
 
 	if (resolvedRename) {
 		invalidateFsScanAfterRename(resolvedPath, resolvedRename);

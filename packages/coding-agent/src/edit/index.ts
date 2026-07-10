@@ -21,6 +21,7 @@ import { truncateForPrompt } from "../tools/approval";
 import { isInternalUrlPath } from "../tools/path-utils";
 import { type EditMode, normalizeEditMode, resolveEditMode } from "../utils/edit-mode";
 import { executeHashlineSingle, hashlineEditParamsSchema } from "./hashline";
+import { hashPatchInput } from "./hashline/noop-loop-guard";
 import { type ApplyPatchParams, applyPatchSchema, expandApplyPatchToEntries } from "./modes/apply-patch";
 import applyPatchGrammar from "./modes/apply-patch.lark" with { type: "text" };
 import { executePatchSingle, type PatchEditEntry, type PatchParams, patchEditSchema } from "./modes/patch";
@@ -33,6 +34,7 @@ export * from "@oh-my-pi/hashline";
 export { DEFAULT_EDIT_MODE, type EditMode, normalizeEditMode } from "../utils/edit-mode";
 export * from "./apply-patch";
 export * from "./diff";
+export * from "./failure-message";
 export * from "./file-snapshot-store";
 export * from "./hashline";
 export * from "./modes/apply-patch";
@@ -535,12 +537,14 @@ export class EditTool implements AgentTool<TInput> {
 					onUpdate?: (partialResult: AgentToolResult<EditToolDetails, TInput>) => void,
 				) => {
 					const { edits, path } = params as PatchParams;
-					const runs = (edits as PatchEditEntry[]).map(
-						entry => (br: LspBatchRequest | undefined) =>
+					const runs = (edits as PatchEditEntry[]).map(entry => {
+						const payloadHash = hashPatchInput(JSON.stringify({ mode: "patch", path, entry }));
+						return (br: LspBatchRequest | undefined) =>
 							executePatchSingle({
 								session: tool.session,
 								path,
 								params: entry,
+								payloadHash,
 								signal,
 								batchRequest: br,
 								allowFuzzy: tool.#allowFuzzy,
@@ -550,8 +554,8 @@ export class EditTool implements AgentTool<TInput> {
 								allowCreateOverwrite: true,
 								writethrough: tool.#writethrough,
 								beginDeferredDiagnosticsForPath: p => tool.#beginDeferredDiagnosticsForPath(p),
-							}),
-					);
+							});
+					});
 					return executeSinglePathEntries(path, runs, batchRequest, onUpdate, tool.session.cwd, signal);
 				},
 			},
@@ -573,9 +577,11 @@ export class EditTool implements AgentTool<TInput> {
 					batchRequest: LspBatchRequest | undefined,
 					onUpdate?: (partialResult: AgentToolResult<EditToolDetails, TInput>) => void,
 				) => {
+					const rawInput = (params as ApplyPatchParams).input;
 					const entries = expandApplyPatchToEntries(params as ApplyPatchParams);
 					const perFile = entries.map(entry => {
 						const { path, ...patchParams } = entry;
+						const payloadHash = hashPatchInput(JSON.stringify({ mode: "apply_patch", rawInput, entry }));
 						return {
 							path,
 							run: (br: LspBatchRequest | undefined) =>
@@ -583,6 +589,7 @@ export class EditTool implements AgentTool<TInput> {
 									session: tool.session,
 									path,
 									params: patchParams,
+									payloadHash,
 									signal,
 									batchRequest: br,
 									allowFuzzy: tool.#allowFuzzy,
