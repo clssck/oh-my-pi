@@ -13,6 +13,7 @@ import { invalidateFsScanAfterWrite } from "../../tools/fs-cache-invalidation";
 import { outputMeta } from "../../tools/output-meta";
 import { enforcePlanModeWrite, resolvePlanPath } from "../../tools/plan-mode-guard";
 import { generateDiffString, replaceText } from "../diff";
+import { findFirstDifferentLine, sanitizeFailureLine } from "../failure-message";
 import {
 	countLeadingWhitespace,
 	detectLineEnding,
@@ -99,7 +100,7 @@ export class EditMatchError extends Error {
 		const similarity = Math.round(closest.confidence * 100);
 		const searchLines = searchText.split("\n");
 		const actualLines = closest.actualText.split("\n");
-		const { oldLine, newLine } = findFirstDifferentLine(searchLines, actualLines);
+		const { actual: newLine, expected: oldLine } = findFirstDifferentLine(searchLines, actualLines);
 		const thresholdPercent = Math.round(options.threshold * 100);
 
 		const hint = options.allowFuzzy
@@ -114,23 +115,11 @@ export class EditMatchError extends Error {
 				: `Could not find the exact text in ${path}.`,
 			``,
 			`Closest match (${similarity}% similar) at line ${closest.startLine}:`,
-			`  - ${oldLine}`,
-			`  + ${newLine}`,
+			sanitizeFailureLine(`  - ${oldLine}`),
+			sanitizeFailureLine(`  + ${newLine}`),
 			hint,
 		].join("\n");
 	}
-}
-
-function findFirstDifferentLine(oldLines: string[], newLines: string[]): { oldLine: string; newLine: string } {
-	const max = Math.max(oldLines.length, newLines.length);
-	for (let i = 0; i < max; i++) {
-		const oldLine = oldLines[i] ?? "";
-		const newLine = newLines[i] ?? "";
-		if (oldLine !== newLine) {
-			return { oldLine, newLine };
-		}
-	}
-	return { oldLine: oldLines[0] ?? "", newLine: newLines[0] ?? "" };
 }
 
 function formatOccurrenceError(path: string, matchOutcome: MatchOutcome): string {
@@ -253,7 +242,7 @@ function formatPreviewWindow(lines: string[], centerIndex: number, options: Prev
 		.map((line, index) => {
 			const num = start + index + 1;
 			const truncated = line.length > options.maxLen ? `${line.slice(0, options.maxLen - 1)}…` : line;
-			return `  ${num} | ${truncated}`;
+			return sanitizeFailureLine(`  ${num} | ${truncated}`);
 		})
 		.join("\n");
 }

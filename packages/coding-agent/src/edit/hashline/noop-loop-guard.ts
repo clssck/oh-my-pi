@@ -25,9 +25,21 @@ interface NoopLoopEntry {
 	count: number;
 }
 
+interface EditFailureLoopEntry {
+	/** Hash of the most recent failing edit payload on this canonical path. */
+	hash: string;
+	/** Consecutive failure count for the same `hash` on this path. */
+	count: number;
+}
+
 /** Cross-session-safe state slot held on the `ToolSession`. */
 export interface NoopLoopGuard {
 	entries: Map<string, NoopLoopEntry>;
+}
+
+/** Cross-session-safe state slot for byte-identical failing patch/apply_patch payloads. */
+export interface EditFailureLoopGuard {
+	entries: Map<string, EditFailureLoopEntry>;
 }
 
 /**
@@ -39,8 +51,16 @@ export interface NoopLoopGuard {
  */
 export const NOOP_HARD_LIMIT = 3;
 
+/**
+ * Failed JSON/Codex patches are harder loops than successful no-ops: the first
+ * failure already includes recovery copy, so the second byte-identical failure
+ * on the same file escalates to a hard tool error.
+ */
+export const EDIT_FAILURE_HARD_LIMIT = 2;
+
 interface NoopLoopGuardOwner {
 	noopLoopGuard?: NoopLoopGuard;
+	editFailureLoopGuard?: EditFailureLoopGuard;
 }
 
 /** Lazily create the per-session guard, mirroring `getFileSnapshotStore`. */
@@ -78,6 +98,31 @@ export function recordNoopEdit(
 	const count = prev && prev.hash === inputHash ? prev.count + 1 : 1;
 	guard.entries.set(canonicalPath, { hash: inputHash, count });
 	return { count, escalate: count >= NOOP_HARD_LIMIT };
+}
+
+/**
+ * Record a recoverable patch/apply_patch failure keyed by the raw payload hash.
+ * Returns `escalate: true` on the second consecutive identical failure for the
+ * same canonical path.
+ */
+export function recordFailedEdit(
+	session: NoopLoopGuardOwner,
+	canonicalPath: string,
+	inputHash: string,
+): NoopRecordResult {
+	if (!session.editFailureLoopGuard) session.editFailureLoopGuard = { entries: new Map() };
+	const guard = session.editFailureLoopGuard;
+	const prev = guard.entries.get(canonicalPath);
+	const count = prev && prev.hash === inputHash ? prev.count + 1 : 1;
+	guard.entries.set(canonicalPath, { hash: inputHash, count });
+	return { count, escalate: count >= EDIT_FAILURE_HARD_LIMIT };
+}
+
+/** Clear the failed-edit counter after a successful patch for the same path. */
+export function resetFailedEdit(session: NoopLoopGuardOwner, canonicalPath: string): void {
+	const guard = session.editFailureLoopGuard;
+	if (!guard) return;
+	guard.entries.delete(canonicalPath);
 }
 
 /**
