@@ -2,9 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- Bundled additional legacy extension subpaths so plugins can resolve recently added agent-core, AI, and coding-agent modules through the compatibility registry.
+
+### Changed
+
+- Restricted online session-title generation to explicitly configured `tiny` or `smol` model roles, preventing fallback to the `commit` role or active session model.
+
 ### Fixed
 
 - Fixed MCP OAuth dynamic client registration omitting discovered scopes on the RFC 7591 registration body. Providers such as Clerk bind DCR-created clients to only the scopes declared at registration, then reject the subsequent authorize request when it asks for `openid` (from `scopes_supported`). Registration now includes `config.scopes` when present, matching Claude Code and the scopes already sent on authorize.
+- Made failed `edit` operations return bounded closest-match context, targeted reread instructions, and unchanged-payload loop guards so agents recover without blind full-file rereads or byte-identical retries.
 
 ## [16.4.0] - 2026-07-10
 
