@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `advisor.coalesceToolTurns` to review a completed primary tool loop in one advisor request instead of reviewing every intermediate tool continuation.
+
+### Changed
+
+- Reduced failed-`edit` recovery overhead by removing duplicated mismatch text, shrinking preview windows to five lines, and emitting schema-native bounded `read` arguments after the closest-actual patch suggestion.
+- Enabled the one-time subagent soft-request-budget wrap-up steer by default, while retaining the explicit opt-out and unchanged 1.5x graceful abort guard.
+- Restricted online session-title generation to explicitly configured `tiny` or `smol` model roles, preventing fallback to the `commit` role or active session model.
+
+### Fixed
+
+- Made failed `edit` operations return bounded closest-match context, targeted reread instructions, and unchanged-payload loop guards so agents recover without blind full-file rereads or byte-identical retries.
+
 ## [16.4.0] - 2026-07-10
 
 ### Breaking Changes
