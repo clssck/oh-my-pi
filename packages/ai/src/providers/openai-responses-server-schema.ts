@@ -34,7 +34,7 @@ const plainTextSchema = type({
 
 const inputImageBlockSchema = type({
 	type: "'input_image'",
-	"detail?": "'auto' | 'low' | 'high'",
+	"detail?": "'auto' | 'low' | 'high' | 'original'",
 	"image_url?": "string",
 	"file_id?": "string",
 }).narrow((v, ctx) => {
