@@ -21,6 +21,7 @@ import type {
 	ComputerSafetyCheck,
 	ComputerScreenshotRef,
 	Context,
+	ImageContent,
 	Message,
 	TextContent,
 	ThinkingContent,
@@ -33,6 +34,7 @@ import {
 	type OpenAIResponsesFunctionCallItem,
 	type OpenAIResponsesFunctionCallOutputItem,
 	type OpenAIResponsesInputContent,
+	type OpenAIResponsesInputImageBlock,
 	type OpenAIResponsesOutputContent,
 	type OpenAIResponsesReasoningItem,
 	type OpenAIResponsesTool,
@@ -146,6 +148,8 @@ function makeCustomCallId(): string {
 // ─── once-only warnings ─────────────────────────────────────────────────────
 // Module-scoped so we don't spam logs once per turn.
 
+let warnedImageNotSupported = false;
+let warnedFileNotSupported = false;
 let warnedReasoningSummaryLevel = false;
 
 // ─── inbound parser helpers ─────────────────────────────────────────────────
@@ -161,22 +165,66 @@ function extractReasoningTextFromItem(item: OpenAIResponsesReasoningItem): strin
 type InputBlockUnion =
 	| { type: "input_text"; text: string }
 	| { type: "text"; text: string }
-	| { type: "input_image"; detail?: "auto" | "low" | "high" | "original"; image_url?: string; file_id?: string }
+	| OpenAIResponsesInputImageBlock
 	| { type: "input_file"; file_id?: string; filename?: string; file_data?: string; file_url?: string };
 
-/** Walk an input message's content array and retain only text for the generic view.
- * Native image/file references are preserved on the message provider payload. */
-function inputContentParts(blocks: OpenAIResponsesInputContent[] | string | undefined): string | TextContent[] {
+/**
+ * Decode only self-contained base64 image data URLs. Remote URLs and file IDs
+ * remain placeholders because the gateway deliberately has no external fetcher.
+ */
+function decodeInlineImageDataUrl(url: string): { data: string; mimeType: string } | undefined {
+	const match = /^data:(image\/[a-z0-9!#$%&'*+.^_`|~-]+);base64,(.*)$/i.exec(url);
+	if (!match || match[0] !== url) return undefined;
+	const mimeType = match[1];
+	const data = match[2];
+	if (!mimeType || !data || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}(?:==)?|[A-Za-z0-9+/]{3}=?)?$/.test(data)) {
+		return undefined;
+	}
+	return { data, mimeType };
+}
+
+/**
+ * Walk an input message's content array and produce pi-ai text/image content.
+ * Unsupported image references and files become bracketed text placeholders.
+ */
+function inputContentParts(
+	blocks: OpenAIResponsesInputContent[] | string | undefined,
+): string | (TextContent | ImageContent)[] {
 	if (typeof blocks === "string") return blocks;
 	if (!blocks) return [];
-	const parts: TextContent[] = [];
+	const parts: (TextContent | ImageContent)[] = [];
 	for (const raw of blocks) {
 		const block = raw as InputBlockUnion;
 		if (block.type === "input_text" || block.type === "text") {
 			parts.push({ type: "text", text: block.text });
+		} else if (block.type === "input_image") {
+			const decoded = typeof block.image_url === "string" ? decodeInlineImageDataUrl(block.image_url) : undefined;
+			if (decoded) {
+				parts.push({ type: "image", ...decoded, ...(block.detail ? { detail: block.detail } : {}) });
+				continue;
+			}
+			if (!warnedImageNotSupported) {
+				warnedImageNotSupported = true;
+				logger.warn("openai-responses-server: input_image dropped (no pi-ai bridge for image_url/file_id)", {
+					hasUrl: typeof block.image_url === "string",
+					hasFileId: typeof block.file_id === "string",
+				});
+			}
+			const ref = block.image_url ?? block.file_id ?? "?";
+			parts.push({ type: "text", text: `[image: ${ref}]` });
+		} else if (block.type === "input_file") {
+			if (!warnedFileNotSupported) {
+				warnedFileNotSupported = true;
+				logger.warn("openai-responses-server: input_file dropped (no pi-ai bridge for file_id/file_data)", {
+					hasFileId: typeof block.file_id === "string",
+					hasFileData: typeof block.file_data === "string",
+				});
+			}
+			const ref = block.file_id ?? block.filename ?? "?";
+			parts.push({ type: "text", text: `[file: ${ref}]` });
 		}
 	}
-	return parts.length === 1 ? parts[0].text : parts;
+	return parts.length === 1 && parts[0]?.type === "text" ? parts[0].text : parts;
 }
 
 type OutputBlockUnion =
@@ -346,7 +394,6 @@ export function parseRequest(body: unknown, headers?: Headers): ParsedRequest {
 				switch (msg.role) {
 					case "system": {
 						const content = inputContentParts(msg.content as OpenAIResponsesInputContent[] | string | undefined);
-						const flat = typeof content === "string" ? content : content.map(part => part.text).join("");
 						const hasNativeRefs =
 							Array.isArray(msg.content) &&
 							msg.content.some(part => part.type === "input_image" || part.type === "input_file");
@@ -361,8 +408,15 @@ export function parseRequest(body: unknown, headers?: Headers): ParsedRequest {
 								},
 								timestamp: now,
 							});
-						} else if (flat.length > 0) {
-							systemPrompt.push(flat);
+						} else if (typeof content === "string") {
+							if (content.length > 0) systemPrompt.push(content);
+						} else if (content.some(part => part.type === "image")) {
+							// The core Context stores system prompts as text only. Preserve
+							// image-bearing system input as the closest image-capable role.
+							messages.push({ role: "developer", content, timestamp: now });
+						} else {
+							const flat = content.map(part => (part.type === "text" ? part.text : "")).join("");
+							if (flat.length > 0) systemPrompt.push(flat);
 						}
 						break;
 					}
