@@ -1,5 +1,12 @@
 import { describe, expect, it } from "bun:test";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import { clearCustomApis } from "@oh-my-pi/pi-ai/api-registry";
+import { startAuthGateway } from "@oh-my-pi/pi-ai/auth-gateway";
+import { AuthStorage } from "@oh-my-pi/pi-ai/auth-storage";
 import { encodeResponse, encodeStream, parseRequest } from "@oh-my-pi/pi-ai/providers/openai-responses-server";
+import { createMockModel, registerMockApi } from "@oh-my-pi/pi-ai/providers/mock";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai/types";
 import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
 import { Effort } from "@oh-my-pi/pi-catalog/effort";
@@ -690,5 +697,97 @@ describe("openai-responses encodeStream", () => {
 		const response = incomplete.response as Record<string, unknown>;
 		expect(response.status).toBe("incomplete");
 		expect(response.incomplete_details).toEqual({ reason: "max_output_tokens" });
+	});
+});
+
+describe("auth-gateway openai-responses request bridge", () => {
+	it("forwards inline base64 images with original detail to the resolved model", async () => {
+		const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X5fWAAAAAElFTkSuQmCC";
+		registerMockApi();
+		const dir = await fs.mkdtemp(path.join(os.tmpdir(), "gw-responses-image-"));
+		const storage = await AuthStorage.create(path.join(dir, "auth.db"));
+		storage.setRuntimeApiKey("openai", "test-key");
+		const mock = createMockModel({
+			provider: "openai",
+			id: "gpt-image-contract",
+			responses: [{ content: ["ok"] }],
+		});
+		const handle = startAuthGateway({
+			bind: "127.0.0.1:0",
+			bearerTokens: ["t"],
+			storage,
+			resolveModel: () => mock.model,
+			version: "test",
+		});
+
+		try {
+			const response = await fetch(`${handle.url}/v1/responses`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json", Authorization: "Bearer t" },
+				body: JSON.stringify({
+					model: "gpt-image-contract",
+					input: [
+						{
+							type: "message",
+							role: "user",
+							content: [
+								{
+									type: "input_image",
+									image_url: `data:image/png;base64,${pngBase64}`,
+									detail: "original",
+								},
+								{ type: "input_image", image_url: "https://example.test/remote.png", detail: "high" },
+								{ type: "input_image", file_id: "file_remote" },
+								{ type: "input_image", image_url: "data:text/plain;base64,SGVsbG8=" },
+								{ type: "input_image", image_url: "data:image/png;base64," },
+								{ type: "input_image", image_url: "data:image/png;base64,not_base64!" },
+								{ type: "input_image", image_url: "data:image/png;base64,QUJD\n" },
+							],
+						},
+						{
+							type: "message",
+							role: "system",
+							content: [
+								{ type: "input_text", text: "system image context" },
+								{
+									type: "input_image",
+									image_url: `data:image/png;base64,${pngBase64}`,
+									detail: "high",
+								},
+							],
+						},
+					],
+				}),
+			});
+
+			expect(response.status).toBe(200);
+			expect(mock.calls).toHaveLength(1);
+			const message = mock.calls[0]?.context.messages[0];
+			if (message?.role !== "user" || typeof message.content === "string") {
+				throw new Error("expected downstream user content blocks");
+			}
+			expect(message.content).toEqual([
+				{ type: "image", data: pngBase64, mimeType: "image/png", detail: "original" },
+				{ type: "text", text: "[image: https://example.test/remote.png]" },
+				{ type: "text", text: "[image: file_remote]" },
+				{ type: "text", text: "[image: data:text/plain;base64,SGVsbG8=]" },
+				{ type: "text", text: "[image: data:image/png;base64,]" },
+				{ type: "text", text: "[image: data:image/png;base64,not_base64!]" },
+				{ type: "text", text: "[image: data:image/png;base64,QUJD\n]" },
+			]);
+			const systemImageMessage = mock.calls[0]?.context.messages[1];
+			if (systemImageMessage?.role !== "developer" || typeof systemImageMessage.content === "string") {
+				throw new Error("expected image-bearing system input to become developer content blocks");
+			}
+			expect(systemImageMessage.content).toEqual([
+				{ type: "text", text: "system image context" },
+				{ type: "image", data: pngBase64, mimeType: "image/png", detail: "high" },
+			]);
+		} finally {
+			await handle.close();
+			storage.close();
+			await fs.rm(dir, { recursive: true, force: true });
+			clearCustomApis();
+		}
 	});
 });
