@@ -4172,13 +4172,13 @@ export const SETTINGS_SCHEMA = {
 
 	"task.softRequestBudgetNotice": {
 		type: "boolean",
-		default: false,
+		default: true,
 		ui: {
 			tab: "tasks",
 			group: "Subagents",
 			label: "Soft Request Budget Notice",
 			description:
-				"Inject one steering notice when a subagent crosses its soft request budget. Off by default; enabling it asks the child to wrap up before the 1.5x graceful abort guard.",
+				"Inject one steering notice when a subagent crosses its soft request budget. On by default; disable it to suppress the wrap-up request while retaining the 1.5x graceful abort guard.",
 		},
 	},
 

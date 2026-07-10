@@ -80,12 +80,11 @@ const MCP_CALL_TIMEOUT_MS = 60_000;
 
 /**
  * Soft per-agent request budgets (assistant requests per run). When a subagent
- * crosses its budget it can receive an optional steering notice asking it to
- * wrap up; at 1.5x the budget the run is aborted gracefully so partial output is
- * salvaged. The `default` key applies to agents without an explicit entry and
+ * crosses its budget it receives one steering notice asking it to wrap up by
+ * default; at 1.5x the budget the run is aborted gracefully so partial output
+ * is salvaged. The `default` key applies to agents without an explicit entry and
  * can be overridden via the `task.softRequestBudget` setting (0 disables the
- * guard). The notice is off by default and controlled separately by
- * `task.softRequestBudgetNotice`.
+ * guard). `task.softRequestBudgetNotice` can disable the notice independently.
  */
 export const SOFT_REQUEST_BUDGET: Record<string, number> = {
 	scout: 40,
@@ -1960,7 +1959,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 	);
 	const softRequestBudget =
 		configuredDefaultBudget === 0 ? 0 : (SOFT_REQUEST_BUDGET[agent.name] ?? configuredDefaultBudget);
-	const softRequestBudgetNotice = settings.get("task.softRequestBudgetNotice") ?? false;
+	const softRequestBudgetNotice = settings.get("task.softRequestBudgetNotice") ?? true;
 	const parentDepth = options.taskDepth ?? 0;
 	const childDepth = parentDepth + 1;
 	const atMaxDepth = maxRecursionDepth >= 0 && childDepth >= maxRecursionDepth;

@@ -194,9 +194,9 @@ describe("runSubprocess request guards", () => {
 		expect(handle.steerCalls[0].options?.deliverAs).toBe("steer");
 	});
 
-	it("does not inject a steering notice by default when the soft request budget is crossed", async () => {
-		// Budget 4 is crossed at request 4, but notices default off; the run is
-		// still below the 1.5x hard stop of 6 and should complete without steer.
+	it("injects exactly one steering notice by default when the soft budget is crossed", async () => {
+		// Omitting softRequestBudgetNotice exercises its default-on behavior:
+		// steer at request 4, then allow success before the hard stop at 6.
 		const settings = Settings.isolated({
 			"task.maxRuntimeMs": 0,
 			"task.softRequestBudget": 4,
@@ -213,11 +213,14 @@ describe("runSubprocess request guards", () => {
 		});
 		mockCreateAgentSession(handle.session);
 
-		const result = await runSubprocess({ ...baseOptions, id: "subagent-steer-disabled", settings });
+		const result = await runSubprocess({ ...baseOptions, id: "subagent-steer-default", settings });
 
-		expect(result.requests).toBe(5);
 		expect(result.aborted).toBe(false);
-		expect(handle.steerCalls).toEqual([]);
+		expect(result.requests).toBe(5);
+		expect(handle.steerCalls.length).toBe(1);
+		expect(handle.steerCalls[0].content).toContain("[budget notice]");
+		expect(handle.steerCalls[0].content).toContain("4 requests");
+		expect(handle.steerCalls[0].options?.deliverAs).toBe("steer");
 	});
 
 	it("still aborts at 1.5x the soft budget when budget notices are disabled", async () => {
