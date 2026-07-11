@@ -5,9 +5,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+
 from robomp import tasks
 from robomp.github_client import CommentInfo, IssueInfo, RepoInfo
-from robomp.tasks import _ack_directive, _attach_thread, _directive_from_payload, _sanitize_ack
+from robomp.tasks import _ack_directive, _attach_thread, _directive_from_payload
 from robomp.worker import DirectiveInfo
 
 
