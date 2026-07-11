@@ -182,6 +182,9 @@
 ### Fixed
 
 - Fixed an issue in GLM tool calling where missing or malformed argument closers (such as `<arg_value>` mistyped as `</arg_key>`) caused subsequent arguments to be swallowed or merged into a single field, affecting both in-band and native tool calling.
+### Fixed
+
+- Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining placeholders for unresolved remote and file references.
 
 ## [16.4.3] - 2026-07-11
 
@@ -205,9 +208,6 @@
 ### Changed
 
 - Enforced `all_turns` reasoning context for all Responses Lite requests
-### Fixed
-
-- Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining placeholders for unresolved remote and file references.
 
 ## [16.4.0] - 2026-07-10
 
