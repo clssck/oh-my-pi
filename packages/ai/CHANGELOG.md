@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining placeholders for unresolved remote and file references.
+
 ## [16.4.3] - 2026-07-11
 
 ### Fixed
@@ -24,9 +28,6 @@
 ### Changed
 
 - Enforced `all_turns` reasoning context for all Responses Lite requests
-### Fixed
-
-- Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining placeholders for unresolved remote and file references.
 
 ## [16.4.0] - 2026-07-10
 
