@@ -99,8 +99,8 @@ export class PiPerAuthService {
 		if (!provider.supportsOAuth && !provider.supportsApiKey)
 			throw new Error("Provider does not support authentication");
 		await this.#session.modelRegistry.authStorage.remove(provider.credentialId);
-		const stillAuthenticated = this.#session.modelRegistry.authStorage.hasAuth(provider.credentialId);
 		if (provider.id === "deepinfra") this.#session.modelRegistry.clearSourceRegistrations(DEEPINFRA_SOURCE);
+		const stillAuthenticated = this.#session.modelRegistry.authStorage.hasAuth(provider.credentialId);
 		await this.#session.modelRegistry.refresh().catch(() => undefined);
 		if (stillAuthenticated) {
 			throw new Error("Provider credentials are managed outside Pi Per and remain active");
