@@ -235,7 +235,12 @@ export interface ExtensionUIContext {
 	confirm(title: string, message: string, dialogOptions?: ExtensionUIDialogOptions): Promise<boolean>;
 
 	/** Show a text input dialog. */
-	input(title: string, placeholder?: string, dialogOptions?: ExtensionUIDialogOptions): Promise<string | undefined>;
+	input(
+		title: string,
+		placeholder?: string,
+		dialogOptions?: ExtensionUIDialogOptions,
+		allowEmpty?: boolean,
+	): Promise<string | undefined>;
 
 	/** Show the rich ask dialog when the interactive TUI surface is available. */
 	askDialog?(

@@ -10,7 +10,6 @@
  * - Events: AgentSessionEvent objects streamed as they occur
  * - Extension UI: Extension UI requests are emitted, client responds with extension_ui_response
  */
-import { getOAuthProviders } from "@oh-my-pi/pi-ai/oauth";
 import { isZodSchema, zodToWireSchema } from "@oh-my-pi/pi-ai/utils/schema";
 import { $env, isRecord, readJsonl, Snowflake } from "@oh-my-pi/pi-utils";
 import { reset as resetCapabilities } from "../../capability";
@@ -24,6 +23,9 @@ import {
 } from "../../extensibility/extensions";
 import { buildSkillPromptMessage, parseSkillInvocation } from "../../extensibility/skills";
 import { loadSlashCommands } from "../../extensibility/slash-commands";
+import { PiPerAuthService } from "../../integrations/pi-per/auth-service";
+import { PiPerCapabilityService } from "../../integrations/pi-per/capability-service";
+import { PiPerSessionService } from "../../integrations/pi-per/session-service";
 import { type Theme, theme } from "../../modes/theme/theme";
 import type { AgentSession } from "../../session/agent-session";
 import { SKILL_PROMPT_MESSAGE_TYPE, USER_INTERRUPT_LABEL } from "../../session/messages";
@@ -416,7 +418,10 @@ export class RpcShutdownCoordinator {
 	readonly #isShutdownRequested: () => boolean;
 	readonly #performShutdown: () => Promise<void>;
 
-	constructor(options: { isShutdownRequested: () => boolean; performShutdown: () => Promise<void> }) {
+	constructor(options: {
+		isShutdownRequested: () => boolean;
+		performShutdown: () => Promise<void>;
+	}) {
 		this.#isShutdownRequested = options.isShutdownRequested;
 		this.#performShutdown = options.performShutdown;
 	}
@@ -736,11 +741,12 @@ export async function runRpcMode(
 			title: string,
 			placeholder?: string,
 			dialogOptions?: ExtensionUIDialogOptions,
+			allowEmpty?: boolean,
 		): Promise<string | undefined> {
 			return this.#createDialogPromise(
 				dialogOptions,
 				undefined,
-				{ method: "input", title, placeholder, timeout: dialogOptions?.timeout },
+				{ method: "input", title, placeholder, allowEmpty, timeout: dialogOptions?.timeout },
 				response => parseValueDialogResponse(response, dialogOptions),
 			);
 		}
@@ -885,6 +891,21 @@ export async function runRpcMode(
 	// correct waiting promise regardless of which code path created the request.
 	const rpcUiContext = new RpcExtensionUIContext(pendingExtensionRequests, output);
 	setToolUIContext?.(rpcUiContext, true);
+	const authService = new PiPerAuthService({
+		session,
+		ui: rpcUiContext,
+		outputAuthUrl: info =>
+			output({
+				type: "extension_ui_request",
+				id: Snowflake.next() as string,
+				method: "open_url",
+				url: info.url,
+				launchUrl: info.launchUrl,
+				instructions: info.instructions,
+			} as RpcExtensionUIRequest),
+	});
+	let sessionService: PiPerSessionService;
+	const capabilityService = new PiPerCapabilityService(session);
 
 	// Set up extensions with RPC-based UI context
 	await initializeExtensions(session, {
@@ -892,7 +913,12 @@ export async function runRpcMode(
 			output(error(undefined, action, err.message));
 		},
 		reportRuntimeError: err => {
-			output({ type: "extension_error", extensionPath: err.extensionPath, event: err.event, error: err.error });
+			output({
+				type: "extension_error",
+				extensionPath: err.extensionPath,
+				event: err.event,
+				error: err.error,
+			});
 		},
 		onShutdown: () => {
 			shutdownState.requested = true;
@@ -925,6 +951,12 @@ export async function runRpcMode(
 		void emitAvailableCommandsUpdate();
 	});
 	await emitAvailableCommandsUpdate();
+	await authService.initialize();
+	sessionService = new PiPerSessionService({
+		session,
+		clearSubagents: () => subagentRegistry?.clear(),
+		onActiveSessionChanged: emitAvailableCommandsUpdate,
+	});
 
 	// Handle a single command
 	const handleCommand = async (command: RpcCommand): Promise<RpcResponse> => {
@@ -949,10 +981,18 @@ export async function runRpcMode(
 					refreshCommands: emitAvailableCommandsUpdate,
 					reloadPlugins: reloadPluginState,
 					notifyTitleChanged: async () => {
-						output({ type: "session_info_update", title: session.sessionName, sessionId: session.sessionId });
+						output({
+							type: "session_info_update",
+							title: session.sessionName,
+							sessionId: session.sessionId,
+						});
 					},
 					notifyConfigChanged: async () => {
-						output({ type: "config_update", model: session.model, thinkingLevel: session.thinkingLevel });
+						output({
+							type: "config_update",
+							model: session.model,
+							thinkingLevel: session.thinkingLevel,
+						});
 					},
 				});
 				if (builtinResult !== false) {
@@ -1086,7 +1126,9 @@ export async function runRpcMode(
 					);
 				}
 				subagentRegistry.setSubscriptionLevel(command.level);
-				return success(id, "set_subagent_subscription", { level: subagentRegistry.getSubscriptionLevel() });
+				return success(id, "set_subagent_subscription", {
+					level: subagentRegistry.getSubscriptionLevel(),
+				});
 			}
 
 			case "get_subagents": {
@@ -1276,62 +1318,71 @@ export async function runRpcMode(
 			// Login
 			// =================================================================
 
-			case "get_login_providers": {
-				const providers = getOAuthProviders().map(provider => ({
-					id: provider.id,
-					name: provider.name,
-					available: provider.available,
-					authenticated: session.modelRegistry.authStorage.hasAuth(provider.id),
-				}));
-				return success(id, "get_login_providers", { providers });
-			}
-
-			case "login": {
-				const knownProvider = getOAuthProviders().find(p => p.id === command.providerId);
-				if (!knownProvider) {
-					return error(id, "login", `Unknown OAuth provider: ${command.providerId}`);
-				}
-				const uiCtx = new RpcExtensionUIContext(pendingExtensionRequests, output);
-				// Track whether onAuth has fired. Providers that require interactive
-				// input before a browser URL cannot be satisfied headlessly; after
-				// onAuth, prompt input is the pasted OAuth code/redirect URL path.
-				let authEmitted = false;
+			case "get_auth_providers":
+				return success(id, "get_auth_providers", { providers: authService.listProviders() });
+			case "get_login_providers":
+				return success(id, "get_login_providers", {
+					providers: authService.listLoginProviders(),
+				});
+			case "login":
 				try {
-					await session.modelRegistry.authStorage.login(command.providerId, {
-						onAuth: info => {
-							authEmitted = true;
-							output({
-								type: "extension_ui_request",
-								id: Snowflake.next() as string,
-								method: "open_url",
-								url: info.url,
-								launchUrl: info.launchUrl,
-								instructions: info.instructions,
-							} as RpcExtensionUIRequest);
-						},
-						onProgress: message => {
-							uiCtx.notify(message, "info");
-						},
-						onPrompt: async prompt => {
-							if (!authEmitted) {
-								// onPrompt called before any auth URL — provider requires
-								// interactive input that cannot be satisfied headlessly.
-								return Promise.reject(
-									new Error(
-										`Provider '${command.providerId}' requires interactive prompts ` +
-											"which are not supported in RPC mode. Use the terminal UI to log in.",
-									),
-								);
-							}
-							return (await uiCtx.input(prompt.message, prompt.placeholder, { timeout: 600_000 })) ?? "";
-						},
-					});
-					await session.modelRegistry.refresh();
+					await authService.login(command.providerId);
 					return success(id, "login", { providerId: command.providerId });
-				} catch (err: unknown) {
+				} catch (err) {
 					return error(id, "login", err instanceof Error ? err.message : String(err));
 				}
-			}
+			case "set_api_key":
+				try {
+					await authService.setApiKey(command.providerId, command.key);
+					return success(id, "set_api_key", { providerId: command.providerId });
+				} catch (err) {
+					return error(id, "set_api_key", err instanceof Error ? err.message : String(err));
+				}
+			case "logout":
+				try {
+					await authService.logout(command.providerId);
+					return success(id, "logout", { providerId: command.providerId });
+				} catch (err) {
+					return error(id, "logout", err instanceof Error ? err.message : String(err));
+				}
+			case "list_sessions":
+				try {
+					return success(id, "list_sessions", { sessions: await sessionService.list() });
+				} catch (err) {
+					return error(id, "list_sessions", err instanceof Error ? err.message : String(err));
+				}
+			case "archive_session":
+				try {
+					return success(id, "archive_session", await sessionService.archive(command.sessionPath));
+				} catch (err) {
+					return error(id, "archive_session", err instanceof Error ? err.message : String(err));
+				}
+			case "delete_session":
+				try {
+					return success(id, "delete_session", await sessionService.delete(command.sessionPath));
+				} catch (err) {
+					return error(id, "delete_session", err instanceof Error ? err.message : String(err));
+				}
+			case "get_capability_settings":
+				try {
+					return success(id, "get_capability_settings", {
+						capabilities: await capabilityService.list(),
+					});
+				} catch {
+					return error(id, "get_capability_settings", "Unable to load capability settings");
+				}
+			case "set_capability_enabled":
+				try {
+					return success(id, "set_capability_enabled", {
+						capabilities: await capabilityService.setEnabled(command.capabilityId, command.enabled),
+					});
+				} catch (err) {
+					return error(
+						id,
+						"set_capability_enabled",
+						err instanceof Error ? err.message : "Unable to save capability setting",
+					);
+				}
 
 			default: {
 				const unknownCommand = command as { type: string };

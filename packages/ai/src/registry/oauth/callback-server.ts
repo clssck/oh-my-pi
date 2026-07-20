@@ -139,6 +139,9 @@ export abstract class OAuthCallbackFlow {
 	async login(): Promise<OAuthCredentials> {
 		const state = this.generateState();
 		this.#throwIfCancelled();
+		if (Bun.env.PI_OAUTH_CALLBACK_MODE?.trim().toLowerCase() === "manual" && this.ctrl.onManualCodeInput) {
+			this.#manualInputOnly = true;
+		}
 
 		// Start callback server first to get actual redirect URI. Manual-only
 		// flows never bind a server — the advertised redirect URI is fixed and
@@ -382,12 +385,16 @@ export abstract class OAuthCallbackFlow {
 						callbackPromise,
 						requestManualInput()
 							.then((input): CallbackResult | null => {
+								if (!input.trim()) throw new AIError.LoginCancelledError("OAuth login cancelled");
 								const parsed = parseCallbackInput(input);
 								if (!parsed.code) return null;
 								if (expectedState && parsed.state && parsed.state !== expectedState) return null;
 								return { code: parsed.code, state: parsed.state ?? "" };
 							})
-							.catch((): CallbackResult | null => null),
+							.catch((error): CallbackResult | Promise<CallbackResult> => {
+								if (error instanceof AIError.LoginCancelledError || this.#manualInputOnly) throw error;
+								return callbackPromise;
+							}),
 					]);
 					if (result) return result;
 				}

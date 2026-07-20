@@ -26,7 +26,13 @@ import type { TodoPhase } from "../../tools/todo";
 
 export type RpcCommand =
 	// Prompting
-	| { id?: string; type: "prompt"; message: string; images?: ImageContent[]; streamingBehavior?: "steer" | "followUp" }
+	| {
+			id?: string;
+			type: "prompt";
+			message: string;
+			images?: ImageContent[];
+			streamingBehavior?: "steer" | "followUp";
+	  }
 	| { id?: string; type: "steer"; message: string; images?: ImageContent[] }
 	| { id?: string; type: "follow_up"; message: string; images?: ImageContent[] }
 	| { id?: string; type: "abort" }
@@ -41,7 +47,13 @@ export type RpcCommand =
 	| { id?: string; type: "set_host_uri_schemes"; schemes: RpcHostUriSchemeDefinition[] }
 	| { id?: string; type: "set_subagent_subscription"; level: RpcSubagentSubscriptionLevel }
 	| { id?: string; type: "get_subagents" }
-	| { id?: string; type: "get_subagent_messages"; subagentId?: string; sessionFile?: string; fromByte?: number }
+	| {
+			id?: string;
+			type: "get_subagent_messages";
+			subagentId?: string;
+			sessionFile?: string;
+			fromByte?: number;
+	  }
 
 	// Model
 	| { id?: string; type: "set_model"; provider: string; modelId: string }
@@ -82,9 +94,19 @@ export type RpcCommand =
 	// Messages
 	| { id?: string; type: "get_messages" }
 
-	// Login
+	// Authentication
+	| { id?: string; type: "get_auth_providers" }
 	| { id?: string; type: "get_login_providers" }
-	| { id?: string; type: "login"; providerId: string };
+	| { id?: string; type: "login"; providerId: string }
+	| { id?: string; type: "set_api_key"; providerId: string; key: string }
+	| { id?: string; type: "logout"; providerId: string }
+	// Session inventory and mutations
+	| { id?: string; type: "list_sessions" }
+	| { id?: string; type: "archive_session"; sessionPath: string }
+	| { id?: string; type: "delete_session"; sessionPath: string }
+	// Capability settings
+	| { id?: string; type: "get_capability_settings" }
+	| { id?: string; type: "set_capability_enabled"; capabilityId: string; enabled: boolean };
 
 // ============================================================================
 // RPC State
@@ -107,7 +129,12 @@ export interface RpcSessionState {
 	todoPhases: TodoPhase[];
 	/** For session dump / export (plain-text parity with /dump). */
 	systemPrompt?: string[];
-	dumpTools?: Array<{ name: string; description: string; parameters: unknown; examples?: readonly ToolExample[] }>;
+	dumpTools?: Array<{
+		name: string;
+		description: string;
+		parameters: unknown;
+		examples?: readonly ToolExample[];
+	}>;
 	/** Current context window usage. */
 	contextUsage?: ContextUsage;
 }
@@ -166,15 +193,57 @@ export interface RpcSubagentMessagesResult {
 // RPC Responses (stdout)
 // ============================================================================
 
+export interface RpcAuthProvider {
+	id: string;
+	name: string;
+	available: boolean;
+	authenticated: boolean;
+	supportsOAuth: boolean;
+	supportsApiKey: boolean;
+}
+
+export interface RpcCapabilitySetting {
+	id: string;
+	category: "agents" | "mcps" | "plugins" | "extensions" | "skills";
+	name: string;
+	description?: string;
+	enabled: boolean;
+	source?: string;
+	restartRequired: boolean;
+	disabledReason?: string;
+}
+
+export interface OmpSessionSummary {
+	path: string;
+	id: string;
+	title?: string;
+	firstMessage: string;
+	modified: string;
+	messageCount: number;
+	status?: string;
+}
+
 // Success responses with data
 export type RpcResponse =
 	// Prompting (async - events follow)
-	| { id?: string; type: "response"; command: "prompt"; success: true; data?: { agentInvoked: boolean } }
+	| {
+			id?: string;
+			type: "response";
+			command: "prompt";
+			success: true;
+			data?: { agentInvoked: boolean };
+	  }
 	| { id?: string; type: "response"; command: "steer"; success: true }
 	| { id?: string; type: "response"; command: "follow_up"; success: true }
 	| { id?: string; type: "response"; command: "abort"; success: true }
 	| { id?: string; type: "response"; command: "abort_and_prompt"; success: true }
-	| { id?: string; type: "response"; command: "new_session"; success: true; data: { cancelled: boolean } }
+	| {
+			id?: string;
+			type: "response";
+			command: "new_session";
+			success: true;
+			data: { cancelled: boolean };
+	  }
 
 	// State
 	| { id?: string; type: "response"; command: "get_state"; success: true; data: RpcSessionState }
@@ -185,9 +254,27 @@ export type RpcResponse =
 			success: true;
 			data: { commands: RpcAvailableSlashCommand[] };
 	  }
-	| { id?: string; type: "response"; command: "set_todos"; success: true; data: { todoPhases: TodoPhase[] } }
-	| { id?: string; type: "response"; command: "set_host_tools"; success: true; data: { toolNames: string[] } }
-	| { id?: string; type: "response"; command: "set_host_uri_schemes"; success: true; data: { schemes: string[] } }
+	| {
+			id?: string;
+			type: "response";
+			command: "set_todos";
+			success: true;
+			data: { todoPhases: TodoPhase[] };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "set_host_tools";
+			success: true;
+			data: { toolNames: string[] };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "set_host_uri_schemes";
+			success: true;
+			data: { schemes: string[] };
+	  }
 	| {
 			id?: string;
 			type: "response";
@@ -261,10 +348,28 @@ export type RpcResponse =
 	| { id?: string; type: "response"; command: "abort_bash"; success: true }
 
 	// Session
-	| { id?: string; type: "response"; command: "get_session_stats"; success: true; data: SessionStats }
+	| {
+			id?: string;
+			type: "response";
+			command: "get_session_stats";
+			success: true;
+			data: SessionStats;
+	  }
 	| { id?: string; type: "response"; command: "export_html"; success: true; data: { path: string } }
-	| { id?: string; type: "response"; command: "switch_session"; success: true; data: { cancelled: boolean } }
-	| { id?: string; type: "response"; command: "branch"; success: true; data: { text: string; cancelled: boolean } }
+	| {
+			id?: string;
+			type: "response";
+			command: "switch_session";
+			success: true;
+			data: { cancelled: boolean };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "branch";
+			success: true;
+			data: { text: string; cancelled: boolean };
+	  }
 	| {
 			id?: string;
 			type: "response";
@@ -280,10 +385,22 @@ export type RpcResponse =
 			data: { text: string | null };
 	  }
 	| { id?: string; type: "response"; command: "set_session_name"; success: true }
-	| { id?: string; type: "response"; command: "handoff"; success: true; data: RpcHandoffResult | null }
+	| {
+			id?: string;
+			type: "response";
+			command: "handoff";
+			success: true;
+			data: RpcHandoffResult | null;
+	  }
 
 	// Messages
-	| { id?: string; type: "response"; command: "get_messages"; success: true; data: { messages: AgentMessage[] } }
+	| {
+			id?: string;
+			type: "response";
+			command: "get_messages";
+			success: true;
+			data: { messages: AgentMessage[] };
+	  }
 
 	// Login
 	| {
@@ -291,9 +408,67 @@ export type RpcResponse =
 			type: "response";
 			command: "get_login_providers";
 			success: true;
-			data: { providers: Array<{ id: string; name: string; available: boolean; authenticated: boolean }> };
+			data: {
+				providers: Array<{ id: string; name: string; available: boolean; authenticated: boolean }>;
+			};
 	  }
 	| { id?: string; type: "response"; command: "login"; success: true; data: { providerId: string } }
+	| {
+			id?: string;
+			type: "response";
+			command: "get_auth_providers";
+			success: true;
+			data: { providers: RpcAuthProvider[] };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "set_api_key";
+			success: true;
+			data: { providerId: string };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "logout";
+			success: true;
+			data: { providerId: string };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "list_sessions";
+			success: true;
+			data: { sessions: OmpSessionSummary[] };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "archive_session";
+			success: true;
+			data: { path: string; archivedPath: string; activeSessionChanged: boolean };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "delete_session";
+			success: true;
+			data: { path: string; activeSessionChanged: boolean };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "get_capability_settings";
+			success: true;
+			data: { capabilities: RpcCapabilitySetting[] };
+	  }
+	| {
+			id?: string;
+			type: "response";
+			command: "set_capability_enabled";
+			success: true;
+			data: { capabilities: RpcCapabilitySetting[] };
+	  }
 
 	// Error response (any command can fail)
 	| { id?: string; type: "response"; command: string; success: false; error: string };
@@ -327,14 +502,29 @@ export type RpcSessionEventFrame = AgentSessionEvent | RpcSubagentFrame;
 
 /** Emitted when an extension needs user input */
 export type RpcExtensionUIRequest =
-	| { type: "extension_ui_request"; id: string; method: "select"; title: string; options: string[]; timeout?: number }
-	| { type: "extension_ui_request"; id: string; method: "confirm"; title: string; message: string; timeout?: number }
+	| {
+			type: "extension_ui_request";
+			id: string;
+			method: "select";
+			title: string;
+			options: string[];
+			timeout?: number;
+	  }
+	| {
+			type: "extension_ui_request";
+			id: string;
+			method: "confirm";
+			title: string;
+			message: string;
+			timeout?: number;
+	  }
 	| {
 			type: "extension_ui_request";
 			id: string;
 			method: "input";
 			title: string;
 			placeholder?: string;
+			allowEmpty?: boolean;
 			timeout?: number;
 	  }
 	| {

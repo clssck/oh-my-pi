@@ -178,7 +178,7 @@ export function collectGcErrors(result: GcResult): string[] {
 	];
 }
 
-function getArchivedSessionsDir(agentDir: string): string {
+export function getArchivedSessionsDir(agentDir: string): string {
 	return path.join(path.dirname(getSessionsDir(agentDir)), "archive", "sessions");
 }
 
@@ -373,7 +373,7 @@ async function hasLiveNestedSessions(session: SessionInfo, archiveBeforeMs: numb
 	return false;
 }
 
-function archiveDestination(
+export function archiveDestination(
 	archiveRoot: string,
 	sessionsRoot: string,
 	session: SessionInfo,
@@ -482,7 +482,7 @@ async function restoreGzipSessionFile(source: string, destination: string): Prom
 	await fs.unlink(source);
 }
 
-async function moveSessionWithArtifacts(candidate: ArchiveCandidate): Promise<void> {
+export async function moveSessionWithArtifacts(candidate: ArchiveCandidate): Promise<void> {
 	const sourceSession = candidate.session.path;
 	const destSession = candidate.destinationPath;
 	const legacyDestSession = destSession.endsWith(".gz") ? destSession.slice(0, -".gz".length) : `${destSession}.gz`;
@@ -516,6 +516,20 @@ async function moveSessionWithArtifacts(candidate: ArchiveCandidate): Promise<vo
 		}
 		throw error;
 	}
+}
+export async function archiveSessionWithArtifacts(
+	session: SessionInfo,
+	sessionsRoot: string,
+	agentDir = getAgentDir(),
+): Promise<string> {
+	const resolvedAgentDir = path.resolve(agentDir);
+	const archiveRoot = getArchivedSessionsDir(resolvedAgentDir);
+	const destination = archiveDestination(archiveRoot, path.resolve(sessionsRoot), session);
+	if (!destination) throw new Error("Session path is outside managed session storage");
+	await withGcLock(resolvedAgentDir, async () => {
+		await moveSessionWithArtifacts({ ...destination, session });
+	});
+	return destination.destinationPath;
 }
 
 function sqliteNumber(value: number | bigint | null | undefined): number {
@@ -870,7 +884,7 @@ async function openGcLock(lockPath: string): Promise<fs.FileHandle> {
 	}
 }
 
-async function withGcLock<T>(agentDir: string, fn: (lockPath: string) => Promise<T>): Promise<T> {
+export async function withGcLock<T>(agentDir: string, fn: (lockPath: string) => Promise<T>): Promise<T> {
 	const lockPath = path.join(agentDir, "gc.lock");
 	await fs.mkdir(agentDir, { recursive: true });
 	const handle = await openGcLock(lockPath);

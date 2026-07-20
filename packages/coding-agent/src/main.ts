@@ -604,7 +604,9 @@ async function moveMissingCwdSessionIfNeeded(
 	// to the launch cwd, which would make the `moveTo` below a no-op whenever the
 	// move target equals the current project dir. moveTo never chdirs, so the
 	// stale cwd is only a relocation source, not a directory we enter.
-	const manager = await SessionManager.open(session.path, sessionDir, undefined, { initialCwd: sourceCwd });
+	const manager = await SessionManager.open(session.path, sessionDir, undefined, {
+		initialCwd: sourceCwd,
+	});
 	await manager.moveTo(cwd, sessionDir);
 	return { status: "moved", manager };
 }
@@ -941,7 +943,11 @@ export async function buildSessionOptions(
 			: activeSettings.get("prewalk.enabled");
 	if (prewalkEnabled) {
 		const rolePattern = expandRoleAlias(parsed.prewalkInto ?? DEFAULT_PREWALK_TARGET, activeSettings);
-		const resolved = resolveCliModel({ cliModel: rolePattern, modelRegistry, preferences: modelMatchPreferences });
+		const resolved = resolveCliModel({
+			cliModel: rolePattern,
+			modelRegistry,
+			preferences: modelMatchPreferences,
+		});
 		if (resolved.warning) {
 			process.stderr.write(`${chalk.yellow(`Warning: ${resolved.warning}`)}\n`);
 		}
@@ -959,7 +965,11 @@ export async function buildSessionOptions(
 	}
 	if (parsed.planYolo) {
 		const rolePattern = expandRoleAlias(parsed.planYoloInto ?? "@smol", activeSettings);
-		const resolved = resolveCliModel({ cliModel: rolePattern, modelRegistry, preferences: modelMatchPreferences });
+		const resolved = resolveCliModel({
+			cliModel: rolePattern,
+			modelRegistry,
+			preferences: modelMatchPreferences,
+		});
 		if (resolved.warning) {
 			process.stderr.write(`${chalk.yellow(`Warning: ${resolved.warning}`)}\n`);
 		}
@@ -1487,7 +1497,7 @@ export async function runRootCommand(
 			notifs.push({ kind: "error", message: modelRegistryError.message });
 		}
 
-		if (!isInteractive && !session.model) {
+		if (!isInteractive && !session.model && mode !== "rpc" && mode !== "rpc-ui") {
 			if (modelRegistryError) {
 				process.stderr.write(`${chalk.red(modelRegistryError.message)}\n\n`);
 			}
