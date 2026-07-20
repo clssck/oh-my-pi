@@ -26,6 +26,8 @@ interface CapabilityEntry {
 
 export class PiPerCapabilityService {
 	readonly #session: Pick<AgentSession, "settings" | "sessionManager">;
+	#disabledAgents: Set<string> | undefined;
+	#disabledAgentsCwd: string | undefined;
 
 	constructor(session: Pick<AgentSession, "settings" | "sessionManager">) {
 		this.#session = session;
@@ -79,7 +81,7 @@ export class PiPerCapabilityService {
 			marketplace.listInstalledPlugins(),
 		]);
 		const entries: CapabilityEntry[] = [];
-		const disabledAgents = new Set(this.#stringSettings("task.disabledAgents"));
+		const disabledAgents = this.#disabledAgentsFor(cwd);
 		for (const agent of agents) {
 			const enabled = !disabledAgents.has(agent.name);
 			entries.push({
@@ -186,15 +188,30 @@ export class PiPerCapabilityService {
 		return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 	}
 
+	#disabledAgentsFor(cwd: string): Set<string> {
+		if (this.#disabledAgents === undefined || this.#disabledAgentsCwd !== cwd) {
+			this.#disabledAgents = new Set(this.#stringSettings("task.disabledAgents"));
+			this.#disabledAgentsCwd = cwd;
+		}
+		return this.#disabledAgents;
+	}
+
 	async #updateDisabled(
 		path: "disabledExtensions" | "task.disabledAgents",
 		id: string,
 		enabled: boolean,
 	): Promise<void> {
-		const values = new Set(this.#stringSettings(path));
+		const values =
+			path === "task.disabledAgents"
+				? new Set(this.#disabledAgentsFor(this.#session.sessionManager.getCwd()))
+				: new Set(this.#stringSettings(path));
 		if (enabled) values.delete(id);
 		else values.add(id);
 		this.#session.settings.set(path, [...values].sort());
 		await this.#session.settings.flush();
+		if (path === "task.disabledAgents") {
+			this.#disabledAgents = values;
+			this.#disabledAgentsCwd = this.#session.sessionManager.getCwd();
+		}
 	}
 }
