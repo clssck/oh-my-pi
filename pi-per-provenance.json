@@ -7,7 +7,7 @@
   },
   "fork": {
     "repository": "clssck/oh-my-pi",
-    "commit": "ffeb2d750906d8ef773a4433066f1a23da73bfdf"
+    "commit": "4b8a77aee36a4c23c64bece23e4e00bb55765e01"
   },
   "omp": {
     "package": "@oh-my-pi/pi-coding-agent",
