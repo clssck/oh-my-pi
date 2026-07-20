@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "state": "draft",
+  "canonical": {
+    "repository": "can1357/oh-my-pi",
+    "baseCommit": "6ae7cdbf97bbe7b608ce71ff7b3e0532955bd94a"
+  },
+  "fork": {
+    "repository": "clssck/oh-my-pi",
+    "commit": "ffeb2d750906d8ef773a4433066f1a23da73bfdf"
+  },
+  "omp": {
+    "package": "@oh-my-pi/pi-coding-agent",
+    "version": "17.0.1"
+  },
+  "bun": {
+    "version": "1.3.14"
+  },
+  "release": null
+}
