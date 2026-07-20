@@ -75,7 +75,7 @@ export class PiPerAuthService {
 					{ timeout: 600_000 },
 					prompt.allowEmpty,
 				);
-				if (value === undefined) throw new LoginCancelledError("OAuth login cancelled");
+				if (value === undefined) throw new LoginCancelledError("Login cancelled");
 				return value;
 			},
 		});
