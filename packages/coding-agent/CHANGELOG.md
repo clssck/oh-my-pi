@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed `omp auth-gateway serve` to support a provider allowlist for sidecar deployments that must expose only selected broker-backed providers, with provider-qualified `/v1/models` aliases that keep bare model ids backward-compatible.
+- Fixed ACP MCP transport rejection to keep compiling against the current ACP SDK discriminated union.
+
 ## [17.0.9] - 2026-07-23
 
 ### Added
@@ -783,10 +788,6 @@
 - Fixed agents getting stuck waiting for messages from peers that have already stopped running.
 - Fixed compiled Linux binary extension loading when bundled web-search header generation cannot read `header-generator` data files from the build-time path. ([#5178](https://github.com/can1357/oh-my-pi/issues/5178))
 - Fixed plugin custom tool loading to skip and report invalid feature entries instead of crashing startup when a plugin dependency tree leaves one feature unresolved. ([#5189](https://github.com/can1357/oh-my-pi/issues/5189))
-### Fixed
-
-- Fixed `omp auth-gateway serve` to support a provider allowlist for sidecar deployments that must expose only selected broker-backed providers, with provider-qualified `/v1/models` aliases that keep bare model ids backward-compatible.
-- Fixed ACP MCP transport rejection to keep compiling against the current ACP SDK discriminated union.
 
 ## [16.4.4] - 2026-07-11
 
