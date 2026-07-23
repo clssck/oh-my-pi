@@ -34492,11 +34492,12 @@
 			"thinking": {
 				"mode": "effort",
 				"efforts": [
-					"minimal",
 					"low",
-					"medium",
-					"high"
-				]
+					"high",
+					"max"
+				],
+				"defaultLevel": "max",
+				"requiresEffort": true
 			},
 			"compat": {
 				"thinkingFormat": "kimi",

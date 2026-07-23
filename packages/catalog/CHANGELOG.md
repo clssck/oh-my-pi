@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed bundled `kimi-code/k3` metadata to expose its mandatory `low` / `high` / `max` reasoning ladder with `max` as the default.
+
 ## [17.0.9] - 2026-07-23
 
 ### Changed
