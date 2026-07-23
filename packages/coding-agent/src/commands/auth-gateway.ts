@@ -36,6 +36,10 @@ export default class AuthGateway extends Command {
 		providers: Flags.string({
 			description: "Comma-separated provider allowlist for `serve` (for example: openai-codex)",
 		}),
+		"credential-ids": Flags.string({
+			description:
+				"Comma-separated provider:id selectors for `serve` and `check`; scoped providers use only those broker credentials",
+		}),
 	};
 
 	static examples = [
@@ -49,6 +53,7 @@ export default class AuthGateway extends Command {
 		"# Same, machine-readable for scripts\n  omp auth-gateway check --json",
 		"# Strict check — also exercises each credential with a real chat-completion ping\n  omp auth-gateway check --strict",
 		"# Serve only selected broker-backed providers\n  omp auth-gateway serve --providers=openai-codex",
+		"# Serve one provider through selected broker credentials while leaving other providers unchanged\n  omp auth-gateway serve --credential-ids=anthropic:14",
 	];
 
 	async run(): Promise<void> {
@@ -69,6 +74,10 @@ export default class AuthGateway extends Command {
 					?.split(",")
 					.map(provider => provider.trim())
 					.filter(provider => provider.length > 0),
+				credentialIds: flags["credential-ids"]
+					?.split(",")
+					.map(selector => selector.trim())
+					.filter(selector => selector.length > 0),
 			},
 		};
 		await initTheme();

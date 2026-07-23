@@ -91,13 +91,14 @@ Requests use `Authorization: Bearer <token>`. The server compares against an in-
 ### CLI
 
 ```
-omp auth-gateway serve   [--bind=host:port] [--no-auth]
+omp auth-gateway serve   [--bind=host:port] [--no-auth] [--providers=provider,...] [--credential-ids=provider:id,...]
 omp auth-gateway token   [--regenerate] [--json]
 omp auth-gateway status  [--json]
-omp auth-gateway check   [--strict] [--json]
+omp auth-gateway check   [--strict] [--json] [--credential-ids=provider:id,...]
 ```
 
 - `serve` requires `OMP_AUTH_BROKER_URL` (or `auth.broker.url` in `config.yml`) — the gateway is itself a broker client. It calls `AuthBrokerClient.fetchSnapshot()`, wraps it in `RemoteAuthCredentialStore`, and constructs an `AuthStorage` that resolves access tokens through the broker. Default bind is `127.0.0.1:4000`. The gateway token is stored at `<config-dir>/auth-gateway.token` (`0600`); `--no-auth` disables the bearer check entirely (loopback-only use).
+- `--credential-ids` scopes named providers to selected broker row ids for `serve` and `check`; providers without a selector retain all credentials. The filter applies to initial, refreshed, and streamed snapshots and never deletes or disables excluded broker rows. `--providers` separately restricts the served model catalog to selected broker-backed providers.
 - `token` / `status` manage and inspect the gateway bearer token and upstream broker readiness.
 - `check` probes broker-backed credentials through the gateway store. Without `--strict` it uses provider usage probes; `--strict` also exercises each credential against its chat-completion endpoint and can consume a small amount of quota.
 

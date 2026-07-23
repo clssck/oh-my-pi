@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { createAuthGatewayModelCatalog } from "@oh-my-pi/pi-coding-agent/cli/auth-gateway-cli";
+import {
+	createAuthGatewayCredentialFilter,
+	createAuthGatewayModelCatalog,
+} from "@oh-my-pi/pi-coding-agent/cli/auth-gateway-cli";
 
 function gatewayTestModel(provider: string, id: string, api: Api): Model<Api> {
 	return buildModel({
@@ -50,5 +53,30 @@ describe("auth-gateway model catalog", () => {
 		expect(catalog.resolveModel("github-copilot/gpt-5.5")).toBeUndefined();
 		expect(listed.map(model => model.id)).toEqual(["gpt-5.5", "openai-codex/gpt-5.5"]);
 		expect(listed.every(model => model.provider === "openai-codex")).toBe(true);
+	});
+});
+
+describe("auth-gateway credential scopes", () => {
+	const credentials = [
+		{ provider: "anthropic", id: 14 },
+		{ provider: "anthropic", id: 18 },
+		{ provider: "openai-codex", id: 7 },
+	];
+
+	test("restricts only selected providers and leaves other providers unchanged", () => {
+		const filter = createAuthGatewayCredentialFilter(["anthropic:14"], credentials);
+		expect(filter).toBeDefined();
+		if (!filter) throw new Error("expected credential filter");
+
+		expect(filter(credentials[0])).toBe(true);
+		expect(filter(credentials[1])).toBe(false);
+		expect(filter(credentials[2])).toBe(true);
+	});
+
+	test("rejects malformed selectors and provider/id mismatches", () => {
+		expect(() => createAuthGatewayCredentialFilter(["anthropic"], credentials)).toThrow("expected provider:id");
+		expect(() => createAuthGatewayCredentialFilter(["anthropic:7"], credentials)).toThrow(
+			"matched no broker credential",
+		);
 	});
 });

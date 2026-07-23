@@ -24,7 +24,12 @@ import {
 	completeSimple,
 	type Model,
 } from "@oh-my-pi/pi-ai";
-import { AuthBrokerClient, RemoteAuthCredentialStore, type SnapshotResponse } from "@oh-my-pi/pi-ai/auth-broker";
+import {
+	AuthBrokerClient,
+	RemoteAuthCredentialStore,
+	type SnapshotEntry,
+	type SnapshotResponse,
+} from "@oh-my-pi/pi-ai/auth-broker";
 import { DEFAULT_AUTH_GATEWAY_BIND, startAuthGateway } from "@oh-my-pi/pi-ai/auth-gateway";
 import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@oh-my-pi/pi-catalog/models";
 import { getConfigRootDir, isEnoent, VERSION } from "@oh-my-pi/pi-utils";
@@ -59,6 +64,11 @@ export interface AuthGatewayCommandArgs {
 		 * providers they intend to route, instead of every broker credential.
 		 */
 		providers?: string[];
+		/**
+		 * Restrict specific providers to broker credential ids. Each selector is
+		 * `provider:id`; providers without a selector retain all credentials.
+		 */
+		credentialIds?: string[];
 	};
 }
 
@@ -94,6 +104,37 @@ export function createAuthGatewayModelCatalog(models: Iterable<Model<Api>>): Aut
 	return {
 		resolveModel: (id: string) => bareModels.get(id) ?? qualifiedModels.get(id),
 		listModels: () => listedModels,
+	};
+}
+
+type AuthGatewayCredentialIdentity = Pick<SnapshotEntry, "id" | "provider">;
+
+export function createAuthGatewayCredentialFilter(
+	selectors: readonly string[] | undefined,
+	credentials: readonly AuthGatewayCredentialIdentity[],
+): ((entry: AuthGatewayCredentialIdentity) => boolean) | undefined {
+	if (!selectors || selectors.length === 0) return undefined;
+
+	const scopedIds = new Map<string, Set<number>>();
+	for (const selector of selectors) {
+		const separator = selector.lastIndexOf(":");
+		const provider = selector.slice(0, separator).trim();
+		const idText = selector.slice(separator + 1).trim();
+		if (separator <= 0 || !provider || !/^[1-9]\d*$/.test(idText)) {
+			throw new Error(`Invalid auth gateway credential selector "${selector}"; expected provider:id`);
+		}
+		const id = Number(idText);
+		if (!Number.isSafeInteger(id) || !credentials.some(entry => entry.provider === provider && entry.id === id)) {
+			throw new Error(`Auth gateway credential selector "${selector}" matched no broker credential`);
+		}
+		const providerIds = scopedIds.get(provider) ?? new Set<number>();
+		providerIds.add(id);
+		scopedIds.set(provider, providerIds);
+	}
+
+	return entry => {
+		const providerIds = scopedIds.get(entry.provider);
+		return providerIds === undefined || providerIds.has(entry.id);
 	};
 }
 
@@ -190,7 +231,8 @@ async function runServe(flags: AuthGatewayCommandArgs["flags"]): Promise<void> {
 	// in sdk.ts. The gateway never touches local SQLite.
 	const client = createBrokerClient(brokerConfig);
 	const initialSnapshot = await fetchBrokerSnapshot(client);
-	const store = new RemoteAuthCredentialStore({ client, initialSnapshot });
+	const credentialFilter = createAuthGatewayCredentialFilter(flags.credentialIds, initialSnapshot.credentials);
+	const store = new RemoteAuthCredentialStore({ client, initialSnapshot, credentialFilter });
 	// Refresh + usage both flow through the store's broker hooks automatically —
 	// `RemoteAuthCredentialStore.refreshOAuthCredential` and `.fetchUsageReports`.
 	// AuthStorage discovers them when no explicit option overrides them, so the
@@ -238,6 +280,9 @@ async function runServe(flags: AuthGatewayCommandArgs["flags"]): Promise<void> {
 		process.stdout.write(`auth: disabled (--no-auth) — any client can call this gateway\n`);
 	}
 	process.stdout.write(`upstream broker: ${brokerConfig.url}\n`);
+	if (flags.credentialIds && flags.credentialIds.length > 0) {
+		process.stdout.write(`credential scope: ${flags.credentialIds.join(",")}\n`);
+	}
 
 	const stopped = Promise.withResolvers<void>();
 	let shutdownStarted = false;
@@ -586,7 +631,8 @@ async function runCheck(flags: AuthGatewayCommandArgs["flags"]): Promise<void> {
 
 	const client = createBrokerClient(brokerConfig);
 	const initialSnapshot = await fetchBrokerSnapshot(client);
-	const store = new RemoteAuthCredentialStore({ client, initialSnapshot });
+	const credentialFilter = createAuthGatewayCredentialFilter(flags.credentialIds, initialSnapshot.credentials);
+	const store = new RemoteAuthCredentialStore({ client, initialSnapshot, credentialFilter });
 	const storage = new AuthStorage(store, { sourceLabel: `broker ${brokerConfig.url}` });
 	try {
 		await storage.reload();

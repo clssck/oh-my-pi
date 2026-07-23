@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added optional credential filtering to broker-backed remote auth stores, enforced across initial, refreshed, and streamed snapshots.
+
 ### Fixed
 
 - Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining placeholders for unresolved remote and file references.

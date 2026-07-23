@@ -131,4 +131,30 @@ describe("RemoteAuthCredentialStore SSE integration", () => {
 		expect(callbacks[0].generation).toBe(refreshed.generation);
 		expect(callbacks[0].snapshot).toEqual(refreshed);
 	});
+
+	test("keeps excluded credentials out of initial, streamed, and refreshed snapshots", async () => {
+		storage!.upsertCredential("anthropic", mintOAuthCredential("b", Date.now() + 120_000));
+		const client = new AuthBrokerClient({ url: handle!.url, token });
+		const initialResult = await client.fetchSnapshot();
+		if (initialResult.status !== 200) throw new Error("expected initial snapshot");
+		const allowedId = initialResult.snapshot.credentials.find(
+			entry => entry.credential.type === "oauth" && entry.credential.email === "a@example.com",
+		)?.id;
+		if (allowedId === undefined) throw new Error("expected allowed credential");
+
+		remote = new RemoteAuthCredentialStore({
+			client,
+			initialSnapshot: initialResult.snapshot,
+			credentialFilter: entry => entry.id === allowedId,
+		});
+		expect(remote.snapshot.credentials.map(entry => entry.id)).toEqual([allowedId]);
+
+		const generationBeforeExcludedEntry = remote.snapshot.generation;
+		storage!.upsertCredential("anthropic", mintOAuthCredential("c", Date.now() + 180_000));
+		await waitUntil(() => remote!.snapshot.generation > generationBeforeExcludedEntry);
+		expect(remote.snapshot.credentials.map(entry => entry.id)).toEqual([allowedId]);
+
+		await remote.refreshSnapshot();
+		expect(remote.snapshot.credentials.map(entry => entry.id)).toEqual([allowedId]);
+	});
 });

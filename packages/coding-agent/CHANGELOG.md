@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added provider-scoped broker credential selection to `omp auth-gateway serve`, allowing sidecar deployments to pin one account without changing other broker clients.
+
 ### Fixed
 
 - Fixed `omp auth-gateway serve` to support a provider allowlist for sidecar deployments that must expose only selected broker-backed providers, with provider-qualified `/v1/models` aliases that keep bare model ids backward-compatible.

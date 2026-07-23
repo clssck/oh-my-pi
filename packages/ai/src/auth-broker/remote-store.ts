@@ -205,6 +205,12 @@ export interface RemoteAuthCredentialStoreOptions {
 	 */
 	streamSnapshots?: boolean;
 	/**
+	 * Keep only credentials accepted by this predicate. The same filter is
+	 * applied to constructor snapshots, full refreshes, and streamed entry
+	 * updates so excluded broker rows cannot reappear after startup.
+	 */
+	credentialFilter?: (entry: SnapshotEntry) => boolean;
+	/**
 	 * Called after broker-sourced full snapshots are applied. The constructor's
 	 * initial snapshot intentionally does not trigger this hook.
 	 */
@@ -215,6 +221,7 @@ export class RemoteAuthCredentialStore implements AuthCredentialStore {
 	readonly #client: AuthBrokerClient;
 	readonly #streamSnapshots: boolean;
 	readonly #onSnapshot?: (snapshot: SnapshotResponse, generation: number) => void;
+	readonly #credentialFilter?: (entry: SnapshotEntry) => boolean;
 	#snapshot: SnapshotResponse = emptySnapshot();
 	#snapshotReceivedAt = Date.now();
 	#generation = 0;
@@ -238,6 +245,7 @@ export class RemoteAuthCredentialStore implements AuthCredentialStore {
 
 	constructor(opts: RemoteAuthCredentialStoreOptions) {
 		this.#client = opts.client;
+		this.#credentialFilter = opts.credentialFilter;
 		this.#streamSnapshots = opts.streamSnapshots ?? true;
 		this.#applySnapshot(opts.initialSnapshot ?? emptySnapshot(), opts.initialSnapshot?.generation ?? 0);
 		this.#onSnapshot = opts.onSnapshot;
@@ -255,7 +263,9 @@ export class RemoteAuthCredentialStore implements AuthCredentialStore {
 	#applySnapshot(snapshot: SnapshotResponse, generation: number, protectNewBlocks = true): void {
 		const nowMs = Date.now();
 		const previousCredentials = this.#snapshot.credentials;
-		const credentials = snapshot.credentials.map(entry => this.#normalizeSnapshotEntryBlocks(entry, nowMs));
+		const credentials = snapshot.credentials
+			.filter(entry => this.#credentialFilter?.(entry) ?? true)
+			.map(entry => this.#normalizeSnapshotEntryBlocks(entry, nowMs));
 		if (snapshotBlocksChanged(previousCredentials, credentials)) this.#invalidateUsageCache();
 		if (protectNewBlocks) this.#protectNewSnapshotBlocks(previousCredentials, credentials, nowMs);
 		this.#snapshot = { ...snapshot, credentials };
@@ -383,6 +393,12 @@ export class RemoteAuthCredentialStore implements AuthCredentialStore {
 		generation: number,
 		serverNowMs: number,
 	): void {
+		if (!(this.#credentialFilter?.(entry) ?? true)) {
+			this.#snapshot = { ...this.#snapshot, generation, serverNowMs, refresher };
+			this.#generation = generation;
+			this.#snapshotReceivedAt = Date.now();
+			return;
+		}
 		const incoming = this.#normalizeSnapshotEntryBlocks(entry, Date.now());
 		const index = this.#snapshot.credentials.findIndex(candidate => candidate.id === incoming.id);
 		const previousBlocks = index === -1 ? undefined : this.#snapshot.credentials[index]?.blocks;
