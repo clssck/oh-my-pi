@@ -177,8 +177,8 @@ function fillThinkingWireDefaults<TApi extends Api>(
 		thinking.supportsDisplay === undefined &&
 		(spec.api === "anthropic-messages" || spec.api === "bedrock-converse-stream") &&
 		supportsAdaptiveThinkingDisplay(spec.id);
-	const needsRequiresEffort = thinking.requiresEffort === undefined && impliesMandatoryReasoning(parsed, spec.id);
-	const needsDefaultLevel = thinking.defaultLevel === undefined && isKimiK3ModelId(spec.id);
+	const needsRequiresEffort = thinking.requiresEffort === undefined && impliesMandatoryReasoning(parsed, spec);
+	const needsDefaultLevel = thinking.defaultLevel === undefined && isKimiK3Spec(spec);
 	if (!effortsChanged && !shouldReplaceEffortMap && !needsDisplay && !needsRequiresEffort && !needsDefaultLevel) {
 		return thinking;
 	}
@@ -216,7 +216,7 @@ export function deriveThinking<TApi extends Api>(spec: ModelSpec<TApi>, compat: 
 		mode: inferThinkingControlMode(spec, parsed),
 		efforts,
 	};
-	if (isKimiK3ModelId(spec.id)) {
+	if (isKimiK3Spec(spec)) {
 		config.defaultLevel = Effort.Max;
 	}
 	const effortMap = inferEffortMap(spec, compat, config.mode, config.efforts);
@@ -229,7 +229,7 @@ export function deriveThinking<TApi extends Api>(spec: ModelSpec<TApi>, compat: 
 	) {
 		config.supportsDisplay = true;
 	}
-	if (impliesMandatoryReasoning(parsed, spec.id)) {
+	if (impliesMandatoryReasoning(parsed, spec)) {
 		config.requiresEffort = true;
 	}
 	return config;
@@ -293,6 +293,10 @@ function isOpenAICompatReasoningApi(api: Api): boolean {
  * (`devin-agent`) selects effort by routing to per-tier sibling model ids
  * instead and must stay unmapped.
  */
+function isKimiK3Spec<TApi extends Api>(spec: ModelSpec<TApi>): boolean {
+	return isKimiK3ModelId(spec.id) || (spec.provider === "kimi-code" && /^k3(?:[._:-]|$)/i.test(spec.id));
+}
+
 function isGpt56PlusWireEffortModel<TApi extends Api>(spec: ModelSpec<TApi>): boolean {
 	switch (spec.api) {
 		case "openai-responses":
@@ -339,7 +343,7 @@ function getModelDefinedEfforts<TApi extends Api>(
 			return DEFAULT_REASONING_EFFORTS_WITH_MAX;
 		}
 	}
-	if (isKimiK3ModelId(spec.id)) {
+	if (isKimiK3Spec(spec)) {
 		return LOW_HIGH_MAX_REASONING_EFFORTS;
 	}
 	if (isSakanaFuguReasoningModel(spec)) {
@@ -573,15 +577,15 @@ const OPENAI_O_SERIES_RE = /^o[134](?:$|[-:.])/i;
  *   (variant-collapse) and the collapsed entry owns off — this floor protects
  *   the orphans.
  */
-function impliesMandatoryReasoning(parsed: ParsedModel, modelId: string): boolean {
+function impliesMandatoryReasoning<TApi extends Api>(parsed: ParsedModel, spec: ModelSpec<TApi>): boolean {
 	if (parsed.family === "gemini") {
 		if (semverGte(parsed.version, "3.0")) return true;
 		if (parsed.kind === "pro" && semverGte(parsed.version, "2.5")) return true;
 	}
-	if (isKimiK3ModelId(modelId)) return true;
-	if (isMinimaxM2FamilyModelId(modelId)) return true;
-	if (OPENAI_O_SERIES_RE.test(bareModelId(modelId))) return true;
-	return findThinkingVariantToken(modelId) !== undefined;
+	if (isKimiK3Spec(spec)) return true;
+	if (isMinimaxM2FamilyModelId(spec.id)) return true;
+	if (OPENAI_O_SERIES_RE.test(bareModelId(spec.id))) return true;
+	return findThinkingVariantToken(spec.id) !== undefined;
 }
 
 function inferAnthropicSupportedEfforts<TApi extends Api>(
