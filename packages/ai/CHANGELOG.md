@@ -17,6 +17,9 @@
 
 - Fixed every Claude (`anthropic-messages`) model on the `opencode-zen` provider failing with `401 Missing API key`: the gateway requires `x-api-key`, so `opencode-zen` now uses X-Api-Key auth like `opencode-go`/`umans` instead of bearer-only, and no longer sends the `context_management` field its Anthropic proxy rejects on thinking requests ([#6510](https://github.com/can1357/oh-my-pi/issues/6510)).
 - Fixed Anthropic native server-tool blocks being dropped from persisted assistant turns, preserving signed web-search continuations in their original response order ([#6495](https://github.com/can1357/oh-my-pi/issues/6495))
+### Fixed
+
+- Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining placeholders for unresolved remote and file references.
 
 ## [17.1.1] - 2026-07-24
 
@@ -38,7 +41,6 @@
 
 ### Fixed
 
-- Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining placeholders for unresolved remote and file references.
 - Fixed stateful OpenAI Responses explicit cache breakpoints being restored onto edited historical messages, ensuring full replays recompute the latest stable cache boundary.
 - Fixed ChatGPT Codex standard and Lite transports rejecting or hiding native computer-use payloads by unrolling the tool definition, forced choice, `computer_call`, and `computer_call_output` into ordinary function-tool forms.
 
