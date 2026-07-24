@@ -1218,12 +1218,6 @@ describe("auth-gateway openai-responses request bridge", () => {
 			}
 			expect(message.content).toEqual([
 				{ type: "image", data: pngBase64, mimeType: "image/png", detail: "original" },
-				{ type: "text", text: "[image: https://example.test/remote.png]" },
-				{ type: "text", text: "[image: file_remote]" },
-				{ type: "text", text: "[image: data:text/plain;base64,SGVsbG8=]" },
-				{ type: "text", text: "[image: data:image/png;base64,]" },
-				{ type: "text", text: "[image: data:image/png;base64,not_base64!]" },
-				{ type: "text", text: "[image: data:image/png;base64,QUJD\n]" },
 			]);
 			const systemImageMessage = mock.calls[0]?.context.messages[1];
 			if (systemImageMessage?.role !== "developer" || typeof systemImageMessage.content === "string") {

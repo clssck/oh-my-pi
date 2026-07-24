@@ -148,8 +148,6 @@ function makeCustomCallId(): string {
 // ─── once-only warnings ─────────────────────────────────────────────────────
 // Module-scoped so we don't spam logs once per turn.
 
-let warnedImageNotSupported = false;
-let warnedFileNotSupported = false;
 let warnedReasoningSummaryLevel = false;
 
 // ─── inbound parser helpers ─────────────────────────────────────────────────
@@ -169,8 +167,8 @@ type InputBlockUnion =
 	| { type: "input_file"; file_id?: string; filename?: string; file_data?: string; file_url?: string };
 
 /**
- * Decode only self-contained base64 image data URLs. Remote URLs and file IDs
- * remain placeholders because the gateway deliberately has no external fetcher.
+ * Decode only self-contained base64 image data URLs. Remote URLs, file IDs,
+ * and input files stay in the replayable native provider payload.
  */
 function decodeInlineImageDataUrl(url: string): { data: string; mimeType: string } | undefined {
 	const match = /^data:(image\/[a-z0-9!#$%&'*+.^_`|~-]+);base64,(.*)$/i.exec(url);
@@ -184,8 +182,8 @@ function decodeInlineImageDataUrl(url: string): { data: string; mimeType: string
 }
 
 /**
- * Walk an input message's content array and produce pi-ai text/image content.
- * Unsupported image references and files become bracketed text placeholders.
+ * Walk an input message's content array and produce generic pi-ai text/image
+ * content. Native references that cannot be decoded stay in providerPayload.
  */
 function inputContentParts(
 	blocks: OpenAIResponsesInputContent[] | string | undefined,
@@ -201,27 +199,7 @@ function inputContentParts(
 			const decoded = typeof block.image_url === "string" ? decodeInlineImageDataUrl(block.image_url) : undefined;
 			if (decoded) {
 				parts.push({ type: "image", ...decoded, ...(block.detail ? { detail: block.detail } : {}) });
-				continue;
 			}
-			if (!warnedImageNotSupported) {
-				warnedImageNotSupported = true;
-				logger.warn("openai-responses-server: input_image dropped (no pi-ai bridge for image_url/file_id)", {
-					hasUrl: typeof block.image_url === "string",
-					hasFileId: typeof block.file_id === "string",
-				});
-			}
-			const ref = block.image_url ?? block.file_id ?? "?";
-			parts.push({ type: "text", text: `[image: ${ref}]` });
-		} else if (block.type === "input_file") {
-			if (!warnedFileNotSupported) {
-				warnedFileNotSupported = true;
-				logger.warn("openai-responses-server: input_file dropped (no pi-ai bridge for file_id/file_data)", {
-					hasFileId: typeof block.file_id === "string",
-					hasFileData: typeof block.file_data === "string",
-				});
-			}
-			const ref = block.file_id ?? block.filename ?? "?";
-			parts.push({ type: "text", text: `[file: ${ref}]` });
 		}
 	}
 	return parts.length === 1 && parts[0]?.type === "text" ? parts[0].text : parts;
