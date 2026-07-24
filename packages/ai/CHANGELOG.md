@@ -22,6 +22,7 @@
 
 ### Fixed
 
+- Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining placeholders for unresolved remote and file references.
 - Fixed stateful OpenAI Responses explicit cache breakpoints being restored onto edited historical messages, ensuring full replays recompute the latest stable cache boundary.
 - Fixed ChatGPT Codex standard and Lite transports rejecting or hiding native computer-use payloads by unrolling the tool definition, forced choice, `computer_call`, and `computer_call_output` into ordinary function-tool forms.
 
@@ -252,9 +253,6 @@
 ### Changed
 
 - Enforced `all_turns` reasoning context for all Responses Lite requests
-### Fixed
-
-- Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining placeholders for unresolved remote and file references.
 
 ## [16.4.0] - 2026-07-10
 
