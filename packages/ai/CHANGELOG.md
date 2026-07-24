@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining placeholders for unresolved remote and file references.
+- Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining unresolved remote and file references in native replay payloads.
 
 ## [17.1.1] - 2026-07-24
 
