@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed bundled `kimi-code/k3` metadata to expose its mandatory `low` / `high` / `max` reasoning ladder with `max` as the default.
+
 ## [17.1.1] - 2026-07-24
 
 ### Added
@@ -14,9 +18,6 @@
 - Added Vercel AI Gateway Responses cache-anchor and cache-lifetime compatibility controls.
 - Added resolved OpenAI GPT-5.6 prompt-cache breakpoint capability metadata, keeping older models and compatible endpoints opt-in only.
 - Added the native `alibaba-token-plan` provider with QwenCloud Token Plan Individual discovery and a curated chat-model fallback catalog ([#6151](https://github.com/can1357/oh-my-pi/issues/6151)).
-### Fixed
-
-- Fixed bundled `kimi-code/k3` metadata to expose its mandatory `low` / `high` / `max` reasoning ladder with `max` as the default.
 
 ## [17.1.0] - 2026-07-24
 
