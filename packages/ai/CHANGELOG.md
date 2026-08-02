@@ -163,6 +163,9 @@
 - Fixed an issue where Codex Responses dropped native image-generation results from assistant content and replays due to stale `generating` statuses.
 - Fixed Anthropic stream truncation handling where unexpected connection closures were incorrectly treated as clean stops, causing the agent loop to halt silently mid-sentence.
 - Optimized Anthropic prompt caching to prevent unnecessary cache invalidation of the entire system prefix when volatile project footer details (such as current working directory, date, or workspace tree) change.
+### Fixed
+
+- Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining unresolved remote and file references in native replay payloads.
 
 ## [17.2.4] - 2026-08-01
 
@@ -371,9 +374,6 @@
 
 - Fixed every Claude (`anthropic-messages`) model on the `opencode-zen` provider failing with `401 Missing API key`: the gateway requires `x-api-key`, so `opencode-zen` now uses X-Api-Key auth like `opencode-go`/`umans` instead of bearer-only, and no longer sends the `context_management` field its Anthropic proxy rejects on thinking requests ([#6510](https://github.com/can1357/oh-my-pi/issues/6510)).
 - Fixed Anthropic native server-tool blocks being dropped from persisted assistant turns, preserving signed web-search continuations in their original response order ([#6495](https://github.com/can1357/oh-my-pi/issues/6495))
-### Fixed
-
-- Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining unresolved remote and file references in native replay payloads.
 
 ## [17.1.1] - 2026-07-24
 
@@ -625,9 +625,6 @@
 ### Changed
 
 - Enforced `all_turns` reasoning context for all Responses Lite requests
-### Fixed
-
-- Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining placeholders for unresolved remote and file references.
 
 ## [16.4.0] - 2026-07-10
 

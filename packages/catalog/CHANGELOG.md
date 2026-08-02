@@ -133,6 +133,9 @@
 
 - Fixed an issue where newly advertised chat models were dropped during dynamic discovery for the `alibaba-token-plan` provider.
 - Fixed a `400` error when forcing a specific tool with DeepSeek reasoning models on OpenCode Zen/Go gateways by automatically downgrading the tool selection mode to `auto` while keeping the tool advertised.
+### Fixed
+
+- Fixed bundled `kimi-code/k3` metadata to expose its mandatory `low` / `high` / `max` reasoning ladder with `max` as the default.
 
 ## [17.2.4] - 2026-08-01
 
@@ -259,9 +262,6 @@
 - Added Vercel AI Gateway integration features, including opt-in automatic prompt-cache compatibility, provider routing preferences, and Responses cache-anchor and cache-lifetime controls.
 - Added prompt-cache breakpoint capability metadata for OpenAI GPT-5.6, with opt-in support for older models and compatible endpoints.
 - Added native alibaba-token-plan provider with QwenCloud Token Plan Individual discovery and a curated chat-model fallback catalog.
-### Fixed
-
-- Fixed bundled `kimi-code/k3` metadata to expose its mandatory `low` / `high` / `max` reasoning ladder with `max` as the default.
 
 ## [17.0.9] - 2026-07-23
 

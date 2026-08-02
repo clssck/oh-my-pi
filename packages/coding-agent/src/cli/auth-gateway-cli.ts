@@ -31,6 +31,7 @@ import {
 	type SnapshotResponse,
 } from "@oh-my-pi/pi-ai/auth-broker";
 import { DEFAULT_AUTH_GATEWAY_BIND, startAuthGateway } from "@oh-my-pi/pi-ai/auth-gateway";
+import { type GeneratedProvider, getBundledModels } from "@oh-my-pi/pi-catalog/models";
 import { getConfigRootDir, isEnoent, logger, VERSION } from "@oh-my-pi/pi-utils";
 import chalk from "@oh-my-pi/pi-utils/chalk";
 import { ModelRegistry } from "../config/model-registry";
@@ -66,7 +67,6 @@ export interface AuthGatewayCommandArgs {
 		providers?: string[];
 	};
 }
-
 
 const ACTIONS: readonly AuthGatewayAction[] = ["serve", "token", "status", "check"];
 
