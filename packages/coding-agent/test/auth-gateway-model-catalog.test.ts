@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { createAuthGatewayModelCatalog } from "@oh-my-pi/pi-coding-agent/cli/auth-gateway-cli";
+import { indexModelsByRequestId } from "@oh-my-pi/pi-coding-agent/cli/auth-gateway-cli";
 
 function gatewayTestModel(provider: string, id: string, api: Api): Model<Api> {
 	return buildModel({
@@ -22,33 +22,21 @@ describe("auth-gateway model catalog", () => {
 	test("keeps bare ids compatible while provider-qualified ids disambiguate collisions", () => {
 		const copilot = gatewayTestModel("github-copilot", "gpt-5.5", "openai-responses");
 		const codex = gatewayTestModel("openai-codex", "gpt-5.5", "openai-codex-responses");
-		const catalog = createAuthGatewayModelCatalog([copilot, codex]);
+		const modelById = indexModelsByRequestId([copilot, codex], new Set(["github-copilot", "openai-codex"]));
 
-		expect(catalog.resolveModel("gpt-5.5")).toBe(copilot);
-		expect(catalog.resolveModel("github-copilot/gpt-5.5")).toBe(copilot);
-		expect(catalog.resolveModel("openai-codex/gpt-5.5")).toBe(codex);
-	});
-
-	test("lists provider-qualified aliases without changing canonical routed model ids", () => {
-		const copilot = gatewayTestModel("github-copilot", "gpt-5.5", "openai-responses");
-		const codex = gatewayTestModel("openai-codex", "gpt-5.5", "openai-codex-responses");
-		const catalog = createAuthGatewayModelCatalog([copilot, codex]);
-		const listed = Array.from(catalog.listModels());
-
-		expect(listed.map(model => model.id)).toEqual(["gpt-5.5", "github-copilot/gpt-5.5", "openai-codex/gpt-5.5"]);
-		expect(listed.find(model => model.id === "openai-codex/gpt-5.5")?.provider).toBe("openai-codex");
-		expect(catalog.resolveModel("openai-codex/gpt-5.5")?.id).toBe("gpt-5.5");
+		expect(modelById.get("gpt-5.5")).toBe(copilot);
+		expect(modelById.get("github-copilot/gpt-5.5")).toBe(copilot);
+		expect(modelById.get("openai-codex/gpt-5.5")).toBe(codex);
 	});
 
 	test("does not expose omitted providers when gateway input is provider-scoped", () => {
+		const copilot = gatewayTestModel("github-copilot", "gpt-5.5", "openai-responses");
 		const codex = gatewayTestModel("openai-codex", "gpt-5.5", "openai-codex-responses");
-		const catalog = createAuthGatewayModelCatalog([codex]);
-		const listed = Array.from(catalog.listModels());
+		const modelById = indexModelsByRequestId([copilot, codex], new Set(["openai-codex"]));
 
-		expect(catalog.resolveModel("gpt-5.5")).toBe(codex);
-		expect(catalog.resolveModel("openai-codex/gpt-5.5")).toBe(codex);
-		expect(catalog.resolveModel("github-copilot/gpt-5.5")).toBeUndefined();
-		expect(listed.map(model => model.id)).toEqual(["gpt-5.5", "openai-codex/gpt-5.5"]);
-		expect(listed.every(model => model.provider === "openai-codex")).toBe(true);
+		expect(modelById.get("gpt-5.5")).toBe(codex);
+		expect(modelById.get("openai-codex/gpt-5.5")).toBe(codex);
+		expect(modelById.get("github-copilot/gpt-5.5")).toBeUndefined();
+		expect([...modelById.values()].every(model => model.provider === "openai-codex")).toBe(true);
 	});
 });
