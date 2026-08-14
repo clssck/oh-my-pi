@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed bundled `kimi-code/k3` metadata to expose its mandatory `low` / `high` / `max` reasoning ladder with `max` as the default.
+
 ## [17.3.4] - 2026-08-14
 
 ### Added
@@ -133,9 +137,6 @@
 
 - Fixed an issue where newly advertised chat models were dropped during dynamic discovery for the `alibaba-token-plan` provider.
 - Fixed a `400` error when forcing a specific tool with DeepSeek reasoning models on OpenCode Zen/Go gateways by automatically downgrading the tool selection mode to `auto` while keeping the tool advertised.
-### Fixed
-
-- Fixed bundled `kimi-code/k3` metadata to expose its mandatory `low` / `high` / `max` reasoning ladder with `max` as the default.
 
 ## [17.2.4] - 2026-08-01
 

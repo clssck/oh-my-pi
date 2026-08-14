@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed `omp auth-gateway serve` to support a provider allowlist for sidecar deployments while retaining the registry-backed model catalog, provider-qualified `/v1/models` aliases, and backward-compatible bare model ids.
+- Fixed ACP MCP transport rejection to report unsupported transports defensively.
+
 ## [17.3.4] - 2026-08-14
 
 ### Changed
@@ -408,10 +413,6 @@
 - Fixed heavily branched conversation trees shifting linear continuations into disconnected columns.
 - Fixed plugin installation validation failures for legacy compatibility shims.
 - Removed hard-coded references to disabled or absent agents in system and tool prompts.
-### Fixed
-
-- Fixed `omp auth-gateway serve` to support a provider allowlist for sidecar deployments while retaining the registry-backed model catalog, provider-qualified `/v1/models` aliases, and backward-compatible bare model ids.
-- Fixed ACP MCP transport rejection to report unsupported transports defensively.
 
 ## [17.2.4] - 2026-08-01
 
