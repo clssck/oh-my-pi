@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 import type { AuthStorage } from "@oh-my-pi/pi-ai";
 import { getBundledModels } from "@oh-my-pi/pi-catalog/models";
 import { TempDir } from "@oh-my-pi/pi-utils";
-import { indexModelsByRequestId } from "../../src/cli/auth-gateway-cli";
+import {
+	indexModelsByRequestId,
+	isHostAuthenticatedProvider,
+	resolveRoutableProviders,
+} from "../../src/cli/auth-gateway-cli";
 import { ModelRegistry } from "../../src/config/model-registry";
 
 function stubAuthStorage(configKeys?: string[]): AuthStorage {
@@ -107,5 +111,80 @@ describe("indexModelsByRequestId (auth-gateway catalog)", () => {
 
 		expect(index.get(`anthropic/${anthropicModel.id}`)).toBeDefined();
 		expect(index.get(`${foreignModel.provider}/${foreignModel.id}`)).toBeUndefined();
+	});
+});
+
+describe("resolveRoutableProviders (auth-gateway host authentication)", () => {
+	const brokerRows = [{ provider: "anthropic" }, { provider: "github-copilot" }] as const satisfies readonly {
+		provider: string;
+	}[];
+
+	test("admits an allowlisted provider when the host itself is authenticated", () => {
+		const routable = resolveRoutableProviders(
+			brokerRows,
+			new Set(["anthropic", "google-vertex"]),
+			provider => provider === "google-vertex",
+		);
+
+		expect(routable).toEqual(new Set(["anthropic", "google-vertex"]));
+	});
+
+	test("omits an allowlisted provider with no broker row and no host auth", () => {
+		const routable = resolveRoutableProviders(brokerRows, new Set(["anthropic", "openai"]), () => false);
+
+		expect(routable).toEqual(new Set(["anthropic"]));
+	});
+
+	test("never admits host-authenticated providers without an explicit --providers filter", () => {
+		const routable = resolveRoutableProviders(brokerRows, null, () => true);
+
+		expect(routable).toEqual(new Set(["anthropic", "github-copilot"]));
+	});
+
+	test("keeps broker rows subject to the provider filter", () => {
+		const routable = resolveRoutableProviders(brokerRows, new Set(["anthropic"]), () => true);
+
+		expect(routable).toEqual(new Set(["anthropic"]));
+	});
+
+	test("routes an allowlisted ADC-authenticated Vertex model with no broker snapshot row", () => {
+		const registry = new ModelRegistry(stubAuthStorage());
+		const vertexModel = registry.getAll().find(model => model.provider === "google-vertex");
+		if (!vertexModel) throw new Error("expected a bundled google-vertex model");
+
+		// Broker snapshot holds no google-vertex row; the gateway host reports
+		// ADC auth for it via the registry's authenticated sentinel.
+		const routable = resolveRoutableProviders(
+			[{ provider: "anthropic" }],
+			new Set(["anthropic", "google-vertex"]),
+			provider => provider === "google-vertex",
+		);
+		const index = indexModelsByRequestId(registry.getAll(), routable);
+
+		expect(index.get(`google-vertex/${vertexModel.id}`)).toBe(vertexModel);
+		expect(index.get(vertexModel.id)).toBe(vertexModel);
+	});
+
+	test("keeps an allowlisted Vertex model unroutable when the host is not authenticated", () => {
+		const registry = new ModelRegistry(stubAuthStorage());
+		const vertexModel = registry.getAll().find(model => model.provider === "google-vertex");
+		if (!vertexModel) throw new Error("expected a bundled google-vertex model");
+
+		const routable = resolveRoutableProviders(
+			[{ provider: "anthropic" }],
+			new Set(["anthropic", "google-vertex"]),
+			() => false,
+		);
+		const index = indexModelsByRequestId(registry.getAll(), routable);
+
+		expect(index.get(`google-vertex/${vertexModel.id}`)).toBeUndefined();
+	});
+
+	test("isHostAuthenticatedProvider rejects anything but the registry sentinel", () => {
+		// A provider with no registry env resolver can never be host-authenticated.
+		expect(isHostAuthenticatedProvider("gateway-test-unknown-provider")).toBe(false);
+		// A plain env-key provider resolves a real secret, not the sentinel —
+		// even when this host happens to export the key, it stays unroutable.
+		expect(isHostAuthenticatedProvider("openai")).toBe(false);
 	});
 });

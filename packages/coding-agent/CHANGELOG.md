@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `omp auth-gateway serve` routing for explicitly allowlisted providers authenticated by the gateway host, enabling Google Vertex AI through Application Default Credentials without storing service-account credentials in the broker.
+
 ### Fixed
 
 - Fixed `omp auth-gateway serve` to support a provider allowlist for sidecar deployments while retaining the registry-backed model catalog, provider-qualified `/v1/models` aliases, and backward-compatible bare model ids.
