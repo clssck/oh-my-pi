@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added broker-managed Google Vertex service-account authentication: the broker retains the private key, mints short-lived OAuth access tokens, and exposes only bearer-token, project, location, and account metadata to clients.
+
 ### Fixed
 
 - Fixed the OpenAI Responses auth gateway to preserve inline base64 images, including SnapCompact frames and `detail: "original"`, when routing requests to downstream models while retaining unresolved remote and file references in native replay payloads.

@@ -281,6 +281,7 @@ export type CompletionProbeCredential =
 			expiresAt?: number;
 			accountId?: string;
 			projectId?: string;
+			location?: string;
 			email?: string;
 			enterpriseUrl?: string;
 			apiEndpoint?: string;
@@ -2582,6 +2583,7 @@ export class AuthStorage {
 						accountId: refreshed.accountId ?? current.accountId,
 						email: refreshed.email ?? current.email,
 						projectId: refreshed.projectId ?? current.projectId,
+						location: refreshed.location ?? current.location,
 						enterpriseUrl: refreshed.enterpriseUrl ?? current.enterpriseUrl,
 						apiEndpoint: refreshed.apiEndpoint ?? current.apiEndpoint,
 						orgId: refreshed.orgId ?? current.orgId,
@@ -2934,6 +2936,7 @@ export class AuthStorage {
 			expiresAt: credential.expires,
 			accountId: credential.accountId,
 			projectId: credential.projectId,
+			location: credential.location,
 			email: credential.email,
 			orgId: credential.orgId,
 			orgName: credential.orgName,
@@ -3087,6 +3090,7 @@ export class AuthStorage {
 			expiresAt: credential.expiresAt,
 			accountId: credential.accountId,
 			projectId: credential.projectId,
+			location: credential.location,
 			email: credential.email,
 			enterpriseUrl: credential.enterpriseUrl,
 			apiEndpoint: credential.apiEndpoint,
@@ -3101,6 +3105,7 @@ export class AuthStorage {
 			expiresAt: refreshed.expires,
 			accountId: refreshed.accountId ?? credential.accountId,
 			projectId: refreshed.projectId ?? credential.projectId,
+			location: refreshed.location ?? credential.location,
 			email: refreshed.email ?? credential.email,
 			enterpriseUrl: refreshed.enterpriseUrl ?? credential.enterpriseUrl,
 			apiEndpoint: refreshed.apiEndpoint ?? credential.apiEndpoint,
@@ -5214,6 +5219,7 @@ export class AuthStorage {
 				accountId: result.newCredentials.accountId ?? selection.credential.accountId,
 				email: result.newCredentials.email ?? selection.credential.email,
 				projectId: result.newCredentials.projectId ?? selection.credential.projectId,
+				location: result.newCredentials.location ?? selection.credential.location,
 				enterpriseUrl: result.newCredentials.enterpriseUrl ?? selection.credential.enterpriseUrl,
 				apiEndpoint: result.newCredentials.apiEndpoint ?? selection.credential.apiEndpoint,
 				orgId: result.newCredentials.orgId ?? selection.credential.orgId,
@@ -6453,6 +6459,7 @@ export class AuthStorage {
 				accountId: refreshed.accountId ?? attempted.accountId,
 				email: refreshed.email ?? attempted.email,
 				projectId: refreshed.projectId ?? attempted.projectId,
+				location: refreshed.location ?? attempted.location,
 				enterpriseUrl: refreshed.enterpriseUrl ?? attempted.enterpriseUrl,
 				apiEndpoint: refreshed.apiEndpoint ?? attempted.apiEndpoint,
 				orgId: refreshed.orgId ?? attempted.orgId,

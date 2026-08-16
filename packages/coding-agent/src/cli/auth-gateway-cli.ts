@@ -20,6 +20,7 @@ import {
 	AUTHENTICATED_SENTINEL,
 	AuthStorage,
 	type CompletionProbe,
+	type CompletionProbeCredential,
 	type CompletionProbeInput,
 	type CredentialCompletionResult,
 	completeSimple,
@@ -470,19 +471,24 @@ export async function runAuthGatewayCommand(cmd: AuthGatewayCommandArgs): Promis
 
 /**
  * Providers whose chat endpoint expects a JSON-serialized credential blob
- * (`{ token, projectId, refreshToken, expiresAt, … }`) rather than the raw
- * access token. Mirrors `getOAuthApiKey` in `packages/ai/src/registry/oauth`.
+ * (`{ token, projectId, … }`) rather than the raw access token. Mirrors
+ * `getOAuthApiKey` in `packages/ai/src/registry/oauth`. `google-vertex`
+ * credentials carry a service-account token that `parseVertexBrokerCredential`
+ * reads from the same blob (`token`, `projectId`, `location`).
  */
 const STRUCTURED_API_KEY_PROVIDERS: ReadonlySet<string> = new Set([
 	"github-copilot",
 	"google-gemini-cli",
 	"google-antigravity",
+	"google-vertex",
 ]);
 
 /**
  * Provider API types that strict-mode chat probes intentionally skip:
  * - `bedrock-converse-stream` resolves credentials from the AWS env/profile, not the broker bearer.
- * - `google-vertex` uses Application Default Credentials; the broker bearer is not the right key.
+ * - `google-vertex` (the native API) authenticates through its own transport;
+ *   vertex-hosted `anthropic-messages` / `openai-completions` models are probed
+ *   instead and receive the structured broker blob.
  * - `cursor-agent` and `pi-native` (gateway forwarding) have transport quirks
  *   that make a bearer-only "ping" a poor signal.
  */
@@ -511,9 +517,9 @@ const RETRYABLE_MODEL_ERROR_RE =
 
 /**
  * Rank bundled models for a provider in probe order: cheapest first, then by
- * id for determinism. Filters out non-bearer-auth APIs (Vertex/Bedrock),
- * pi-native transport (would loop through the gateway), and placeholder /
- * router entries with negative/missing cost.
+ * id for determinism. Filters unsupported probe APIs, pi-native transport
+ * (which would loop through the gateway), and placeholder/router entries with
+ * negative or missing cost.
  */
 function pickProbeCandidates(provider: string): Model<Api>[] {
 	const bundled = getBundledModels(provider as GeneratedProvider);
@@ -532,23 +538,46 @@ function pickProbeCandidates(provider: string): Model<Api>[] {
 }
 
 /**
- * Compose the apiKey bytes a provider's chat endpoint expects, given a
- * post-refresh probe credential. Mirrors `getOAuthApiKey` for the providers
- * that require a structured blob; otherwise returns the raw access token /
- * API key.
+ * The JSON-serialized credential blob `composeProbeApiKey` builds for
+ * providers whose chat endpoint parses a structured key rather than a raw
+ * bearer. Field set mirrors `getOAuthApiKey` in
+ * `packages/ai/src/registry/oauth`; `google-vertex` rows add `location` for
+ * `parseVertexBrokerCredential`.
  */
-function composeProbeApiKey(provider: string, credential: CompletionProbeInput["credential"]): string {
+export interface StructuredProbeApiKey {
+	token: string;
+	projectId?: string;
+	location?: string;
+	enterpriseUrl?: string;
+	refreshToken?: string;
+	expiresAt?: number;
+	email?: string;
+	accountId?: string;
+}
+
+/**
+ * Compose the apiKey bytes a provider's chat endpoint expects, given a
+ * post-refresh probe credential. Structured providers get the JSON blob
+ * above; everyone else gets the raw access token / API key.
+ */
+export function composeProbeApiKey(provider: string, credential: CompletionProbeCredential): string {
 	if (credential.type === "api_key") return credential.apiKey;
 	if (!STRUCTURED_API_KEY_PROVIDERS.has(provider)) return credential.accessToken;
-	return JSON.stringify({
+	const structured: StructuredProbeApiKey = {
 		token: credential.accessToken,
-		enterpriseUrl: credential.enterpriseUrl,
 		projectId: credential.projectId,
-		refreshToken: credential.refreshToken,
+		location: credential.location,
+		enterpriseUrl: credential.enterpriseUrl,
+		// `google-vertex` rows are service accounts: the broker's refresh field
+		// is not an OAuth refresh token, and forwarding it would put private
+		// key material into the request key. `parseVertexBrokerCredential`
+		// never reads it anyway.
+		...(provider === "google-vertex" ? {} : { refreshToken: credential.refreshToken }),
 		expiresAt: credential.expiresAt,
 		email: credential.email,
 		accountId: credential.accountId,
-	});
+	};
+	return JSON.stringify(structured);
 }
 
 async function probeOneModel(

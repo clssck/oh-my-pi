@@ -7,6 +7,7 @@ export type OAuthCredentials = {
 	expires: number;
 	enterpriseUrl?: string;
 	projectId?: string;
+	location?: string;
 	email?: string;
 	accountId?: string;
 	apiEndpoint?: string;

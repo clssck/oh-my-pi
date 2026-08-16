@@ -5,6 +5,7 @@
 ### Added
 
 - Added `omp auth-gateway serve` routing for explicitly allowlisted providers authenticated by the gateway host, enabling Google Vertex AI through Application Default Credentials without storing service-account credentials in the broker.
+- Added broker-backed Google Vertex AI routing and strict credential probes that preserve project/location metadata while keeping service-account private keys inside the auth broker.
 
 ### Fixed
 

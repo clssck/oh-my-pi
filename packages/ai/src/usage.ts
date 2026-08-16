@@ -303,6 +303,8 @@ export interface UsageCredential {
 	expiresAt?: number;
 	accountId?: string;
 	projectId?: string;
+	/** Vertex AI region the credential is scoped to (see OAuthCredentials.location). */
+	location?: string;
 	email?: string;
 	/** Organization/workspace the credential is scoped to (see OAuthCredentials.orgId). */
 	orgId?: string;
