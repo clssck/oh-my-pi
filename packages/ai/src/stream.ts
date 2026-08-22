@@ -32,7 +32,7 @@ import { type GitLabDuoWorkflowOptions, streamGitLabDuoWorkflow } from "./provid
 import type { GoogleOptions } from "./providers/google";
 import { getVertexAccessToken } from "./providers/google-auth";
 import type { GoogleGeminiCliOptions } from "./providers/google-gemini-cli";
-import type { GoogleVertexOptions } from "./providers/google-vertex";
+import { type GoogleVertexOptions, parseVertexBrokerCredential } from "./providers/google-vertex";
 import { isKimiModel, streamKimi } from "./providers/kimi";
 import type { OllamaChatOptions } from "./providers/ollama";
 import type { OpenAICompletionsOptions } from "./providers/openai-completions";
@@ -720,11 +720,13 @@ function withProviderInFlightLimit<TOptions extends Pick<StreamOptions, "signal"
 
 function createVertexAuthenticatedFetch(options: StreamOptions | undefined): FetchImpl {
 	const baseFetch = options?.fetch ?? fetch;
+	const brokerCredential = parseVertexBrokerCredential(options?.apiKey);
 	const vertexFetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-		const token = await getVertexAccessToken({ signal: options?.signal, fetch: baseFetch });
+		const token =
+			brokerCredential?.token ?? (await getVertexAccessToken({ signal: options?.signal, fetch: baseFetch }));
 		const headers = new Headers(init?.headers);
 		headers.set("Authorization", `Bearer ${token}`);
-		const rewritten = resolveVertexRequest(input);
+		const rewritten = resolveVertexRequest(input, brokerCredential?.projectId, brokerCredential?.location);
 		const url = rewritten instanceof Request ? rewritten.url : rewritten.toString();
 		if (isVertexRawPredictUrl(url)) {
 			const bodyText = await readVertexRequestBody(rewritten, init);
@@ -765,9 +767,14 @@ function transformVertexAnthropicBody(bodyText: string): string {
 	}
 }
 
-function resolveVertexRequest(input: string | URL | Request): string | URL | Request {
-	const project = $env.GOOGLE_CLOUD_PROJECT || $env.GCP_PROJECT || $env.GCLOUD_PROJECT;
-	const location = $env.GOOGLE_VERTEX_LOCATION || $env.GOOGLE_CLOUD_LOCATION || $env.VERTEX_LOCATION;
+function resolveVertexRequest(
+	input: string | URL | Request,
+	credentialProject?: string,
+	credentialLocation?: string,
+): string | URL | Request {
+	const project = credentialProject || $env.GOOGLE_CLOUD_PROJECT || $env.GCP_PROJECT || $env.GCLOUD_PROJECT;
+	const location =
+		credentialLocation || $env.GOOGLE_VERTEX_LOCATION || $env.GOOGLE_CLOUD_LOCATION || $env.VERTEX_LOCATION;
 	if (!project || !location) return input;
 
 	const rewriteUrl = (url: string): string => {

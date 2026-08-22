@@ -157,6 +157,7 @@ export async function getOAuthApiKey(
 		provider === "github-copilot" ||
 		provider === "google-gemini-cli" ||
 		provider === "google-antigravity" ||
+		provider === "google-vertex" ||
 		provider === "alibaba-coding-plan";
 	const apiKey = needsStructuredApiKey
 		? JSON.stringify({
@@ -164,7 +165,8 @@ export async function getOAuthApiKey(
 				token: creds.access,
 				enterpriseUrl: creds.enterpriseUrl,
 				projectId: creds.projectId,
-				refreshToken: creds.refresh,
+				location: creds.location,
+				refreshToken: provider === "google-vertex" ? undefined : creds.refresh,
 				expiresAt: creds.expires,
 				email: creds.email,
 				accountId: creds.accountId,

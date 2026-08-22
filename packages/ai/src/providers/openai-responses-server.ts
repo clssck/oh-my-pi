@@ -169,19 +169,43 @@ type InputBlockUnion =
 	| OpenAIResponsesInputImageBlock
 	| OpenAIResponsesInputFileBlock;
 
-/** Walk an input message's content array and retain only text for the generic view.
- * Native image/file references are preserved on the message provider payload. */
-function inputContentParts(blocks: OpenAIResponsesInputContent[] | string | undefined): string | TextContent[] {
+/**
+ * Decode only self-contained base64 image data URLs. Remote URLs, file IDs,
+ * and input files stay in the replayable native provider payload.
+ */
+function decodeInlineImageDataUrl(url: string): { data: string; mimeType: string } | undefined {
+	const match = /^data:(image\/[a-z0-9!#$%&'*+.^_`|~-]+);base64,(.*)$/i.exec(url);
+	if (!match || match[0] !== url) return undefined;
+	const mimeType = match[1];
+	const data = match[2];
+	if (!mimeType || !data || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}(?:==)?|[A-Za-z0-9+/]{3}=?)?$/.test(data)) {
+		return undefined;
+	}
+	return { data, mimeType };
+}
+
+/**
+ * Walk an input message's content array and produce generic pi-ai text/image
+ * content. Native references that cannot be decoded stay in providerPayload.
+ */
+function inputContentParts(
+	blocks: OpenAIResponsesInputContent[] | string | undefined,
+): string | (TextContent | ImageContent)[] {
 	if (typeof blocks === "string") return blocks;
 	if (!blocks) return [];
-	const parts: TextContent[] = [];
+	const parts: (TextContent | ImageContent)[] = [];
 	for (const raw of blocks) {
 		const block = raw as InputBlockUnion;
 		if (block.type === "input_text" || block.type === "text") {
 			parts.push({ type: "text", text: block.text });
+		} else if (block.type === "input_image") {
+			const decoded = typeof block.image_url === "string" ? decodeInlineImageDataUrl(block.image_url) : undefined;
+			if (decoded) {
+				parts.push({ type: "image", ...decoded, ...(block.detail ? { detail: block.detail } : {}) });
+			}
 		}
 	}
-	return parts.length === 1 ? parts[0].text : parts;
+	return parts.length === 1 && parts[0]?.type === "text" ? parts[0].text : parts;
 }
 
 type OutputBlockUnion =
@@ -394,7 +418,6 @@ export function parseRequest(body: unknown, headers?: Headers): ParsedRequest {
 				switch (msg.role) {
 					case "system": {
 						const content = inputContentParts(msg.content as OpenAIResponsesInputContent[] | string | undefined);
-						const flat = typeof content === "string" ? content : content.map(part => part.text).join("");
 						const hasNativeRefs =
 							Array.isArray(msg.content) &&
 							msg.content.some(part => part.type === "input_image" || part.type === "input_file");
@@ -409,8 +432,11 @@ export function parseRequest(body: unknown, headers?: Headers): ParsedRequest {
 								},
 								timestamp: now,
 							});
-						} else if (flat.length > 0) {
-							systemPrompt.push(flat);
+						} else if (typeof content === "string") {
+							if (content.length > 0) systemPrompt.push(content);
+						} else {
+							const flat = content.map(part => (part.type === "text" ? part.text : "")).join("");
+							if (flat.length > 0) systemPrompt.push(flat);
 						}
 						break;
 					}
