@@ -198,10 +198,34 @@ _DIRECT_IMPLEMENTATION_RE = re.compile(
     re.IGNORECASE,
 )
 
+_MARKDOWN_FENCE_RE = re.compile(r"^(?P<marker>`{3,}|~{3,})")
+
+
+def _unquoted_markdown_text(body: str) -> str:
+    """Remove quoted and fenced text that cannot authorize implementation."""
+    lines: list[str] = []
+    fence: tuple[str, int] | None = None
+    for line in body.splitlines():
+        stripped = line.lstrip()
+        match = _MARKDOWN_FENCE_RE.match(stripped)
+        if fence is not None:
+            if match:
+                marker = match.group("marker")
+                if marker[0] == fence[0] and len(marker) >= fence[1]:
+                    fence = None
+            continue
+        if match:
+            marker = match.group("marker")
+            fence = (marker[0], len(marker))
+            continue
+        if not stripped.startswith(">"):
+            lines.append(line)
+    return "\n".join(lines)
+
 
 def is_direct_implementation_request(body: str | None) -> bool:
     """Return whether a maintainer comment explicitly asks the bot to implement."""
-    return isinstance(body, str) and _DIRECT_IMPLEMENTATION_RE.search(body) is not None
+    return isinstance(body, str) and _DIRECT_IMPLEMENTATION_RE.search(_unquoted_markdown_text(body)) is not None
 
 
 def _pr_review_pr(pr: Mapping[str, Any], repo: str, action: str, bot_login: str) -> RouteDecision:

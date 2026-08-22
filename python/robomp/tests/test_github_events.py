@@ -800,6 +800,8 @@ def test_is_direct_implementation_request_requires_explicit_action() -> None:
     assert not is_direct_implementation_request("I do not think we should implement this yet")
     assert not is_direct_implementation_request("I will fix the flaky test myself later")
     assert not is_direct_implementation_request("we need to fix the CI config")
+    assert not is_direct_implementation_request("> please fix this")
+    assert not is_direct_implementation_request("Quoted approval:\n```text\ngo ahead\n```")
 
 
 def test_route_directive_set_for_owner_direct_implementation_request_without_mention() -> None:
