@@ -4,6 +4,7 @@
 ### Added
 
 - Added broker-managed Google Vertex service-account authentication that keeps private keys in the broker and exposes only short-lived bearer metadata to clients.
+- Added RunInfra API-key authentication for broker-managed credentials.
 
 ### Fixed
 
