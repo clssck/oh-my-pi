@@ -51,6 +51,7 @@ import {
 	mapModelsDevToModels,
 	OPENAI_DAYBREAK_CURATED_FALLBACK_MODELS,
 	projectOpenAIProReasoningAliases,
+	RUNINFRA_STATIC_MODELS,
 	SAKANA_FUGU_STATIC_MODELS,
 	stripFireworksDeepSeekThinkingToggle,
 	YOLO_AUTO_STATIC_MODELS,
@@ -207,10 +208,12 @@ function applyGlobalModelsDevFallback(
 	modelsDevModels: readonly ModelSpec[],
 ): ModelSpec[] {
 	const providerScopedKeys = new Set(modelsDevModels.map(model => `${model.provider}/${model.id}`));
+	const runInfraCuratedKeys = new Set(RUNINFRA_STATIC_MODELS.map(model => `${model.provider}/${model.id}`));
 	const globalReferences = createGlobalModelsDevReferenceMap(modelsDevModels);
 	return models.map(model => {
 		if (
 			providerScopedKeys.has(`${model.provider}/${model.id}`) ||
+			runInfraCuratedKeys.has(`${model.provider}/${model.id}`) ||
 			model.provider === "devin" ||
 			model.provider === "baseten"
 		) {
@@ -581,6 +584,11 @@ async function generateModels() {
 	// at boot. If live `/v1/models` discovery succeeds, it is authoritative.
 	if (!authoritativeCatalogProviders.has("gmi-cloud")) {
 		allModels.push(...GMI_CLOUD_STATIC_MODELS);
+	}
+	// Seed RunInfra's configured production models when generation has no API
+	// key. Authenticated discovery replaces this slice with the account catalog.
+	if (!authoritativeCatalogProviders.has("runinfra")) {
+		allModels.push(...RUNINFRA_STATIC_MODELS);
 	}
 	// Seed the GitLab Duo Agent fallback model so a fresh install (no credentialed
 	// dynamic discovery/cache yet) still surfaces the provider's default model in the

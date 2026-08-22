@@ -1174,6 +1174,102 @@ export function gmiCloudModelManagerOptions(
 }
 
 // ---------------------------------------------------------------------------
+// 1c. RunInfra
+// ---------------------------------------------------------------------------
+
+const RUNINFRA_BASE_URL = "https://api.runinfra.ai/v1";
+
+export const RUNINFRA_STATIC_MODELS: readonly ModelSpec<"openai-completions">[] = [
+	{
+		id: "deepseek-v4-flash",
+		name: "DeepSeek V4 Flash",
+		api: "openai-completions",
+		provider: "runinfra",
+		baseUrl: RUNINFRA_BASE_URL,
+		reasoning: true,
+		input: ["text"],
+		cost: { input: 0.13, output: 0.27, cacheRead: 0.01, cacheWrite: 0 },
+		contextWindow: 1_048_576,
+		maxTokens: 32_768,
+		thinking: { mode: "effort", efforts: [Effort.Low, Effort.High, Effort.Max] },
+	},
+	{
+		id: "deepseek-v4-pro",
+		name: "DeepSeek V4 Pro",
+		api: "openai-completions",
+		provider: "runinfra",
+		baseUrl: RUNINFRA_BASE_URL,
+		reasoning: true,
+		input: ["text"],
+		cost: { input: 0.6, output: 1.9, cacheRead: 0.03, cacheWrite: 0 },
+		contextWindow: 1_048_576,
+		maxTokens: 32_768,
+		thinking: { mode: "effort", efforts: [Effort.Low, Effort.High, Effort.Max] },
+	},
+	{
+		id: "qwen3-8-2-4t-a95b",
+		name: "Qwen3.8 2.4T A95B",
+		api: "openai-completions",
+		provider: "runinfra",
+		baseUrl: RUNINFRA_BASE_URL,
+		reasoning: false,
+		input: ["text"],
+		cost: { input: 2, output: 6, cacheRead: 0.2, cacheWrite: 0 },
+		contextWindow: 262_144,
+		maxTokens: 32_768,
+	},
+	{
+		id: "qwen3-8-27b",
+		name: "Qwen3.8 27B",
+		api: "openai-completions",
+		provider: "runinfra",
+		baseUrl: RUNINFRA_BASE_URL,
+		reasoning: true,
+		input: ["text"],
+		cost: { input: 0.1, output: 0.4, cacheRead: 0.01, cacheWrite: 0 },
+		contextWindow: 262_144,
+		maxTokens: 32_768,
+		thinking: { mode: "effort", efforts: [Effort.Low, Effort.High], defaultLevel: Effort.High },
+		compat: {
+			supportsReasoningEffort: true,
+			reasoningContentField: "reasoning_content",
+		},
+	},
+];
+
+export interface RunInfraModelManagerConfig {
+	apiKey?: string;
+	baseUrl?: string;
+	fetch?: FetchImpl;
+}
+
+function mapRunInfraModel(
+	entry: OpenAICompatibleModelRecord,
+	defaults: ModelSpec<"openai-completions">,
+	reference: ModelSpec<"openai-completions"> | undefined,
+): ModelSpec<"openai-completions"> {
+	const known = RUNINFRA_STATIC_MODELS.find(model => model.id === defaults.id) ?? reference;
+	return known
+		? { ...mapWithBundledReference(entry, defaults, known), name: known.name }
+		: { ...defaults, name: toModelName(entry.name, defaults.name) };
+}
+
+export function runInfraModelManagerOptions(
+	config?: RunInfraModelManagerConfig,
+): ModelManagerOptions<"openai-completions"> {
+	return createOpenAICompatibleModelManagerOptions({
+		api: "openai-completions",
+		providerId: "runinfra",
+		defaultBaseUrl: RUNINFRA_BASE_URL,
+		config,
+		dynamicModelsAuthoritative: true,
+		requireApiKey: true,
+		filterModel: (_entry, model) => !/(?:embedding|rerank|tts)/i.test(model.id),
+		mapModel: mapRunInfraModel,
+	});
+}
+
+// ---------------------------------------------------------------------------
 // 2. Groq
 // ---------------------------------------------------------------------------
 
