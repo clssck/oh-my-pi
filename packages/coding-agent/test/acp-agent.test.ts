@@ -35,6 +35,7 @@ import type {
 	ClientCapabilities,
 	CreateElicitationRequest,
 	CreateElicitationResponse,
+	McpServer,
 	PromptRequest,
 	SessionNotification,
 	Validator,
@@ -3308,4 +3309,29 @@ describe("ACP agent MCP server configuration (late-connecting servers)", () => {
 			refreshSpy.mockRestore();
 		}
 	}, 15_000);
+	it("rejects an internal ACP transport in session/new mcpServers defensively", async () => {
+		const harness = await createHarness();
+
+		// `type: "acp"` is the agent's internal transport and is never advertised in
+		// `mcpCapabilities`, but a malformed payload must still fail cleanly.
+		await expect(
+			harness.agent.newSession({
+				cwd: harness.cwdA,
+				mcpServers: [{ type: "acp", name: "internal-channel", url: "acp://internal", headers: [] }],
+			}),
+		).rejects.toThrow("Unsupported MCP server transport: acp");
+	});
+
+	it("reports an unknown transport for a type-less, command-less server row", async () => {
+		const harness = await createHarness();
+
+		// A malformed type-less row without a `command` must not be reported as
+		// a valid stdio transport.
+		await expect(
+			harness.agent.newSession({
+				cwd: harness.cwdA,
+				mcpServers: [{ name: "malformed-stdio" } as unknown as McpServer],
+			}),
+		).rejects.toThrow("Unsupported MCP server transport: unknown");
+	});
 });

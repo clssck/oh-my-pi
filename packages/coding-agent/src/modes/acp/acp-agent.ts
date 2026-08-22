@@ -2694,7 +2694,8 @@ export class AcpAgent implements Agent {
 		}
 		// The experimental ACP-channel transport (`type: "acp"`) is not advertised in
 		// `mcpCapabilities`, so a spec-compliant client never sends it; reject defensively.
-		throw new Error(`Unsupported MCP server transport: ${server.type}`);
+		const transport = server.type ?? "unknown";
+		throw new Error(`Unsupported MCP server transport: ${transport}`);
 	}
 
 	#toNameValueMap(values: Array<{ name: string; value: string }>): { [name: string]: string } {
