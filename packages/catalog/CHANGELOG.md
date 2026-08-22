@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
+### Added
+
+- Added RunInfra model discovery and bundled DeepSeek and Qwen model metadata.
+
 ### Fixed
 
 - Fixed bare Kimi Code K3 models to expose the required low/high/max effort ladder with max as the default.

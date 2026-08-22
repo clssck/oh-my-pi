@@ -103,6 +103,7 @@ export function applyGeneratedModelPolicies(models: ModelSpec<Api>[]): void {
  */
 export function rebakeModelThinking(model: ModelSpec<Api>): void {
 	if (isCollapsedVariantSpec(model)) return;
+	if (model.provider === "runinfra" && model.id === "qwen3-8-27b" && model.thinking) return;
 	if (
 		model.compat &&
 		"thinkingFormat" in model.compat &&
