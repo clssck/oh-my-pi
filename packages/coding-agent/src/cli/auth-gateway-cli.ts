@@ -17,11 +17,14 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import {
 	type Api,
+	AUTHENTICATED_SENTINEL,
 	AuthStorage,
 	type CompletionProbe,
+	type CompletionProbeCredential,
 	type CompletionProbeInput,
 	type CredentialCompletionResult,
 	completeSimple,
+	getEnvApiKey,
 	type Model,
 } from "@oh-my-pi/pi-ai";
 import {
@@ -59,6 +62,12 @@ export interface AuthGatewayCommandArgs {
 		 * actually usable" signal. Slower and consumes a tiny amount of quota.
 		 */
 		strict?: boolean;
+		/**
+		 * Restrict `serve` to a comma-separated provider allowlist. Sidecar
+		 * deployments (e.g. robomp's Codex-only gateway) expose just the
+		 * providers they intend to route, instead of every broker credential.
+		 */
+		providers?: string[];
 	};
 }
 
@@ -150,18 +159,67 @@ async function fetchBrokerSnapshot(client: AuthBrokerClient): Promise<SnapshotRe
 const CATALOG_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
 /**
+ * True when the provider registry reports that the *gateway host itself* is
+ * authenticated for `provider`: the env resolver yields
+ * {@link AUTHENTICATED_SENTINEL} instead of a bearer string, meaning the
+ * provider transport mints its own credentials (Vertex ADC,
+ * Bedrock credential chains, …) and needs no key on the wire.
+ *
+ * Only the sentinel qualifies. A resolver that hands back a real secret
+ * (`GOOGLE_CLOUD_API_KEY`, `OPENAI_API_KEY`, …) is deliberately rejected: a
+ * stray key in the gateway's environment must not silently become a
+ * client-reachable route. Broker-issued credentials stay the only secrets the
+ * gateway spends on behalf of its clients.
+ */
+export function isHostAuthenticatedProvider(provider: string): boolean {
+	return getEnvApiKey(provider) === AUTHENTICATED_SENTINEL;
+}
+
+/**
+ * Providers whose models the gateway is willing to route, by either path:
+ *
+ * - **Broker credential** — the provider has a row in the broker snapshot.
+ * - **Host authentication** — the provider has no broker row, but the registry
+ *   reports the host is authenticated for it ({@link isHostAuthenticatedProvider}).
+ *
+ * Host authentication additionally requires an explicit `--providers` entry:
+ * without a filter the gateway stays broker-only, so ambient host credentials
+ * are never exposed by accident. Broker rows keep their existing behaviour:
+ * admitted whenever they pass the filter (or when no filter is configured).
+ */
+export function resolveRoutableProviders(
+	credentials: Iterable<{ readonly provider: string }>,
+	providerFilter: ReadonlySet<string> | null,
+	isHostAuthenticated: (provider: string) => boolean,
+): Set<string> {
+	const routable = new Set<string>();
+	for (const entry of credentials) {
+		if (providerFilter !== null && !providerFilter.has(entry.provider)) continue;
+		routable.add(entry.provider);
+	}
+	if (providerFilter !== null) {
+		for (const provider of providerFilter) {
+			if (routable.has(provider)) continue;
+			if (isHostAuthenticated(provider)) routable.add(provider);
+		}
+	}
+	return routable;
+}
+
+/**
  * Index resolvable models by the request ids clients may send: the
  * provider-qualified `provider/id` (always) and the bare `id` (first-write-wins
- * fallback for legacy clients). Scoped to providers the gateway holds broker
- * credentials for, since only those are routable.
+ * fallback for legacy clients). Scoped to the providers the gateway can
+ * actually authenticate — see {@link resolveRoutableProviders} — since only
+ * those are routable.
  */
 export function indexModelsByRequestId(
 	models: readonly Model<Api>[],
-	providersWithCreds: ReadonlySet<string>,
+	routableProviders: ReadonlySet<string>,
 ): Map<string, Model<Api>> {
 	const modelById = new Map<string, Model<Api>>();
 	for (const model of models) {
-		if (!providersWithCreds.has(model.provider)) continue;
+		if (!routableProviders.has(model.provider)) continue;
 		modelById.set(`${model.provider}/${model.id}`, model);
 		if (!modelById.has(model.id)) modelById.set(model.id, model);
 	}
@@ -198,22 +256,32 @@ async function runServe(flags: AuthGatewayCommandArgs["flags"]): Promise<void> {
 	await storage.reload();
 
 	// Build the model resolver + catalog from the ModelRegistry — the same
-	// component the TUI/CLI use — scoped to providers we hold credentials for.
-	// `getAll()` is a superset of the bundled catalog (bundled first, then
-	// cached + broker-discovered), so the discovery-only models omp itself
-	// reaches become routable through the gateway instead of freezing on the
-	// compiled snapshot. `ignoreLocalModelConfig` keeps the host's `models.yml`
-	// out of the picture: client-side provider overrides (baseUrl/apiKey/headers/
-	// transport) and custom models must never route a broker-backed gateway or
-	// shadow broker credentials. Format handlers ask `resolveModel` to translate
-	// a client-requested `model` field into a pi-ai `Model<Api>` before dispatch;
-	// `listModels` powers `/v1/models`.
+	// component the TUI/CLI use — scoped to the providers we can authenticate:
+	// broker credentials, plus allowlisted providers the host itself is
+	// authenticated for. `getAll()` is a superset of the bundled catalog
+	// (bundled first, then cached + broker-discovered), so discovery-only
+	// models become routable instead of freezing on the compiled snapshot.
+	// `ignoreLocalModelConfig` keeps the host's `models.yml` out of the
+	// picture: client-side provider overrides and custom models must never
+	// route a broker-backed gateway or shadow broker credentials. Format
+	// handlers ask `resolveModel` to translate a client-requested `model`
+	// field into a pi-ai `Model<Api>` before dispatch; `listModels` powers
+	// `/v1/models`.
+	const providerFilter = flags.providers && flags.providers.length > 0 ? new Set(flags.providers) : null;
 	const snapshot = storage.exportSnapshot();
-	const providersWithCreds = new Set<string>();
-	for (const entry of snapshot.credentials) providersWithCreds.add(entry.provider);
+	const routableProviders = resolveRoutableProviders(
+		snapshot.credentials,
+		providerFilter,
+		isHostAuthenticatedProvider,
+	);
+	if (providerFilter !== null && routableProviders.size === 0) {
+		throw new Error(
+			`Auth gateway provider filter matched no broker credential and no host-authenticated provider: ${flags.providers?.join(", ") ?? ""}`,
+		);
+	}
 	const registry = new ModelRegistry(storage, undefined, { ignoreLocalModelConfig: true });
 	await registry.refresh();
-	let modelById = indexModelsByRequestId(registry.getAll(), providersWithCreds);
+	let modelById = indexModelsByRequestId(registry.getAll(), routableProviders);
 
 	const handle = startAuthGateway({
 		storage,
@@ -239,7 +307,7 @@ async function runServe(flags: AuthGatewayCommandArgs["flags"]): Promise<void> {
 		void registry
 			.refresh()
 			.then(() => {
-				modelById = indexModelsByRequestId(registry.getAll(), providersWithCreds);
+				modelById = indexModelsByRequestId(registry.getAll(), routableProviders);
 			})
 			.catch(error => {
 				logger.warn("auth-gateway catalog refresh failed", {
@@ -409,19 +477,24 @@ export async function runAuthGatewayCommand(cmd: AuthGatewayCommandArgs): Promis
 
 /**
  * Providers whose chat endpoint expects a JSON-serialized credential blob
- * (`{ token, projectId, refreshToken, expiresAt, … }`) rather than the raw
- * access token. Mirrors `getOAuthApiKey` in `packages/ai/src/registry/oauth`.
+ * (`{ token, projectId, … }`) rather than the raw access token. Mirrors
+ * `getOAuthApiKey` in `packages/ai/src/registry/oauth`. `google-vertex`
+ * credentials carry a service-account token that `parseVertexBrokerCredential`
+ * reads from the same blob (`token`, `projectId`, `location`).
  */
 const STRUCTURED_API_KEY_PROVIDERS: ReadonlySet<string> = new Set([
 	"github-copilot",
 	"google-gemini-cli",
 	"google-antigravity",
+	"google-vertex",
 ]);
 
 /**
  * Provider API types that strict-mode chat probes intentionally skip:
  * - `bedrock-converse-stream` resolves credentials from the AWS env/profile, not the broker bearer.
- * - `google-vertex` uses Application Default Credentials; the broker bearer is not the right key.
+ * - `google-vertex` (the native API) authenticates through its own transport;
+ *   vertex-hosted `anthropic-messages` / `openai-completions` models are probed
+ *   instead and receive the structured broker blob.
  * - `cursor-agent` and `pi-native` (gateway forwarding) have transport quirks
  *   that make a bearer-only "ping" a poor signal.
  */
@@ -450,9 +523,9 @@ const RETRYABLE_MODEL_ERROR_RE =
 
 /**
  * Rank bundled models for a provider in probe order: cheapest first, then by
- * id for determinism. Filters out non-bearer-auth APIs (Vertex/Bedrock),
- * pi-native transport (would loop through the gateway), and placeholder /
- * router entries with negative/missing cost.
+ * id for determinism. Filters unsupported probe APIs, pi-native transport
+ * (which would loop through the gateway), and placeholder/router entries with
+ * negative or missing cost.
  */
 function pickProbeCandidates(provider: string): Model<Api>[] {
 	const bundled = getBundledModels(provider as GeneratedProvider);
@@ -471,23 +544,46 @@ function pickProbeCandidates(provider: string): Model<Api>[] {
 }
 
 /**
- * Compose the apiKey bytes a provider's chat endpoint expects, given a
- * post-refresh probe credential. Mirrors `getOAuthApiKey` for the providers
- * that require a structured blob; otherwise returns the raw access token /
- * API key.
+ * The JSON-serialized credential blob {@link composeProbeApiKey} builds for
+ * providers whose chat endpoint parses a structured key rather than a raw
+ * bearer. Field set mirrors `getOAuthApiKey` in
+ * `packages/ai/src/registry/oauth`; `google-vertex` rows add `location` for
+ * `parseVertexBrokerCredential`.
  */
-function composeProbeApiKey(provider: string, credential: CompletionProbeInput["credential"]): string {
+export interface StructuredProbeApiKey {
+	token: string;
+	projectId?: string;
+	location?: string;
+	enterpriseUrl?: string;
+	refreshToken?: string;
+	expiresAt?: number;
+	email?: string;
+	accountId?: string;
+}
+
+/**
+ * Compose the apiKey bytes a provider's chat endpoint expects, given a
+ * post-refresh probe credential. Structured providers get the JSON blob
+ * above; everyone else gets the raw access token / API key.
+ */
+export function composeProbeApiKey(provider: string, credential: CompletionProbeCredential): string {
 	if (credential.type === "api_key") return credential.apiKey;
 	if (!STRUCTURED_API_KEY_PROVIDERS.has(provider)) return credential.accessToken;
-	return JSON.stringify({
+	const structured: StructuredProbeApiKey = {
 		token: credential.accessToken,
-		enterpriseUrl: credential.enterpriseUrl,
 		projectId: credential.projectId,
-		refreshToken: credential.refreshToken,
+		location: credential.location,
+		enterpriseUrl: credential.enterpriseUrl,
+		// `google-vertex` rows are service accounts: the broker's refresh field
+		// is not an OAuth refresh token, and forwarding it would put private
+		// key material into the request key. `parseVertexBrokerCredential`
+		// never reads it anyway.
+		...(provider === "google-vertex" ? {} : { refreshToken: credential.refreshToken }),
 		expiresAt: credential.expiresAt,
 		email: credential.email,
 		accountId: credential.accountId,
-	});
+	};
+	return JSON.stringify(structured);
 }
 
 async function probeOneModel(
