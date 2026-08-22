@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import pytest
 
 from robomp import tasks
-from robomp.github_client import IssueInfo, RepoInfo
-from robomp.tasks import _attach_thread, _directive_from_payload
+from robomp.github_client import CommentInfo, IssueInfo, RepoInfo
+from robomp.tasks import _ack_directive, _attach_thread, _directive_from_payload
 from robomp.worker import DirectiveInfo
 
 
@@ -265,3 +265,182 @@ async def test_handle_pr_conversation_preserves_authorizes_impl_to_run_task(
         "pr_number": 7,
         "run_task_authorizes_impl": True,
     }
+
+
+class _AckGitHub:
+    def __init__(self, existing: tuple[CommentInfo, ...] = ()) -> None:
+        self._existing = list(existing)
+        self.posted: list[tuple[str, int, str]] = []
+
+    async def list_comments(self, repo: str, number: int) -> list[CommentInfo]:
+        return list(self._existing)
+
+    async def post_comment(self, repo: str, number: int, body: str) -> CommentInfo:
+        self.posted.append((repo, number, body))
+        return CommentInfo(id=999, author="clssck-bot", body=body, created_at="2026-06-29T00:00:00Z")
+
+
+def _ack_inputs(*, body: str = "implement the export button", author: str = "octo"):
+    directive = _directive_from_payload(
+        {"_robomp_directive": {"body": body, "author": author, "authorizes_impl": True}}
+    )
+    assert directive is not None
+    comment = CommentInfo(id=42, author=author, body=f"@bot {body}", created_at="2026-06-29T00:00:00Z")
+    return comment, directive
+
+
+async def test_ack_directive_posts_contextual_once() -> None:
+    gh = _AckGitHub()
+    comment, directive = _ack_inputs(body="add a PDF export button", author="octo")
+    await _ack_directive(gh, "octo/widget", 7, comment, directive)
+    assert len(gh.posted) == 1
+    repo, number, body = gh.posted[0]
+    assert (repo, number) == ("octo/widget", 7)
+    assert "octo" in body  # addresses the requester
+    assert "PDF export button" in body  # contextual: echoes the actual request
+    assert "robomp-ack:42" in body  # dedup marker keyed to the triggering comment
+
+
+async def test_ack_directive_is_idempotent_on_retry() -> None:
+    prior = CommentInfo(
+        id=7,
+        author="clssck-bot",
+        body="On it...\n<!-- robomp-ack:42 -->",
+        created_at="2026-06-29T00:00:00Z",
+    )
+    gh = _AckGitHub(existing=(prior,))
+    comment, directive = _ack_inputs()
+    await _ack_directive(gh, "octo/widget", 7, comment, directive)
+    assert gh.posted == []  # marker already present -> no duplicate ack on retry
+
+
+async def test_ack_directive_noop_without_directive() -> None:
+    gh = _AckGitHub()
+    comment, _ = _ack_inputs()
+    await _ack_directive(gh, "octo/widget", 7, comment, None)
+    assert gh.posted == []
+
+
+async def test_ack_directive_swallows_backend_error() -> None:
+    class _Boom(_AckGitHub):
+        async def list_comments(self, repo: str, number: int) -> list[CommentInfo]:
+            raise TimeoutError("proxy timeout")
+
+    gh = _Boom()
+    comment, directive = _ack_inputs()
+    await _ack_directive(gh, "octo/widget", 7, comment, directive)  # must not raise
+    assert gh.posted == []
+
+
+def test_sanitize_ack_strips_markers_and_fences() -> None:
+    text = tasks._sanitize_ack("Hello <!-- robomp-ack:9 --> there")
+    assert text is not None
+    assert "<!--" not in text
+    assert "robomp-ack" not in text
+    assert "Hello" in text
+    assert "there" in text
+    assert tasks._sanitize_ack("```\nfoo bar\n```") == "foo bar"
+
+
+def test_sanitize_ack_empty_and_nonstr_to_none() -> None:
+    assert tasks._sanitize_ack("") is None
+    assert tasks._sanitize_ack("   ") is None
+    assert tasks._sanitize_ack(None) is None
+    assert tasks._sanitize_ack("<!-- robomp-ack:1 -->") is None
+
+
+def test_sanitize_ack_caps_length() -> None:
+    text = tasks._sanitize_ack("x" * 5000)
+    assert text is not None
+    assert len(text) <= 1200
+    assert text.endswith("…")
+
+
+async def test_ack_directive_dynamic_path_posts_generated_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(*a, **k):
+        return "Understood: persist window size+pos locally; starting now."
+
+    monkeypatch.setattr(tasks, "_generate_ack_text", _fake)
+    gh = _AckGitHub()
+    comment, directive = _ack_inputs()
+    await tasks._ack_directive(
+        gh,
+        "octo/widget",
+        7,
+        comment,
+        directive,
+        settings=SimpleNamespace(ack_dynamic=True),
+        title="Persist bounds",
+    )
+
+    assert len(gh.posted) == 1
+    _, _, body = gh.posted[0]
+    assert "Understood: persist window size+pos locally; starting now." in body
+    assert "robomp-ack:42" in body
+    assert "starting on your request now" not in body
+
+
+async def test_ack_directive_falls_back_to_static_when_generator_returns_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(*a, **k):
+        return None
+
+    monkeypatch.setattr(tasks, "_generate_ack_text", _fake)
+    gh = _AckGitHub()
+    comment, directive = _ack_inputs()
+    await tasks._ack_directive(
+        gh,
+        "octo/widget",
+        7,
+        comment,
+        directive,
+        settings=SimpleNamespace(ack_dynamic=True),
+    )
+
+    assert len(gh.posted) == 1
+    _, _, body = gh.posted[0]
+    assert "starting on your request now" in body
+    assert "robomp-ack:42" in body
+
+
+async def test_ack_directive_static_when_dynamic_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(*a, **k):
+        raise AssertionError("should not be called")
+
+    monkeypatch.setattr(tasks, "_generate_ack_text", _fake)
+    gh = _AckGitHub()
+    comment, directive = _ack_inputs()
+    await tasks._ack_directive(
+        gh,
+        "octo/widget",
+        7,
+        comment,
+        directive,
+        settings=SimpleNamespace(ack_dynamic=False),
+    )
+
+    assert len(gh.posted) == 1
+    _, _, body = gh.posted[0]
+    assert "starting on your request now" in body
+
+
+async def test_ack_directive_dynamic_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(*a, **k):
+        raise AssertionError("should not be called")
+
+    monkeypatch.setattr(tasks, "_generate_ack_text", _fake)
+    gh = _AckGitHub(
+        existing=(CommentInfo(id=1, author="clssck-bot", body="x\n<!-- robomp-ack:42 -->", created_at="t"),)
+    )
+    comment, directive = _ack_inputs()
+    await tasks._ack_directive(
+        gh,
+        "octo/widget",
+        7,
+        comment,
+        directive,
+        settings=SimpleNamespace(ack_dynamic=True),
+    )
+
+    assert gh.posted == []

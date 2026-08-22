@@ -405,6 +405,34 @@ def finalized_pr_comment() -> str:
     return _load("finalized_pr_comment.md").strip()
 
 
+def directive_ack_comment(*, author: str, request: str, comment_id: int) -> str:
+    snippet = " ".join(request.split())
+    if len(snippet) > 200:
+        snippet = snippet[:199].rstrip() + "…"
+    return render(
+        _load("ack_comment.md"),
+        {"author": author, "request": snippet, "comment_id": comment_id},
+    ).strip()
+
+
+def ack_system_prompt() -> str:
+    return _load("ack_system.md").strip()
+
+
+def ack_user_prompt(*, title: str, author: str, request: str) -> str:
+    snippet = " ".join(request.split())
+    if len(snippet) > 1000:
+        snippet = snippet[:999].rstrip() + "…"
+    return render(
+        _load("ack_user.md"),
+        {"title": title or "(GitHub issue/PR)", "author": author, "request": snippet},
+    ).strip()
+
+
+def directive_ack_dynamic(*, text: str, comment_id: int) -> str:
+    return render(_load("ack_dynamic.md"), {"text": text, "comment_id": comment_id}).strip()
+
+
 def bare_mention_reply() -> str:
     return "What would you like me to do?"
 
@@ -425,6 +453,10 @@ def question_autoclose_suffix(hours: float) -> str:
 __all__ = [
     "classify_next_step",
     "directive",
+    "directive_ack_comment",
+    "ack_system_prompt",
+    "ack_user_prompt",
+    "directive_ack_dynamic",
     "finalized_issue_comment",
     "finalized_pr_comment",
     "followup_comment",
