@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { buildModel } from "@oh-my-pi/pi-catalog/build";
 import { Effort } from "@oh-my-pi/pi-catalog/effort";
+import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
 import { kimiCodeModelManagerOptions } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
 import type { FetchImpl } from "@oh-my-pi/pi-catalog/types";
 
@@ -46,6 +47,17 @@ describe("Kimi Code provider catalog", () => {
 				thinkingFormat: "kimi",
 				kimiApiFormat: "openai",
 			},
+		});
+	});
+
+	it("normalizes bundled K3 to the wire-exact max effort ladder", () => {
+		const model = getBundledModel("kimi-code", "k3");
+
+		expect(model.thinking).toEqual({
+			mode: "effort",
+			efforts: [Effort.Low, Effort.High, Effort.Max],
+			defaultLevel: Effort.Max,
+			requiresEffort: true,
 		});
 	});
 
