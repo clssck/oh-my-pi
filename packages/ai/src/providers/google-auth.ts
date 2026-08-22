@@ -30,11 +30,12 @@ interface CachedToken {
 	expiresAtMs: number;
 }
 
-interface ServiceAccountCredentials {
+export interface ServiceAccountCredentials {
 	type: "service_account";
 	client_email: string;
 	private_key: string;
 	private_key_id?: string;
+	project_id?: string;
 }
 
 interface AuthorizedUserCredentials {
@@ -52,6 +53,41 @@ interface ImpersonatedServiceAccountCredentials {
 }
 
 type AdcFileCredentials = ServiceAccountCredentials | AuthorizedUserCredentials | ImpersonatedServiceAccountCredentials;
+
+export function parseVertexServiceAccountJson(value: string): ServiceAccountCredentials {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(value);
+	} catch {
+		throw new AIError.ConfigurationError("Vertex service-account credential contains invalid JSON");
+	}
+	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+		throw new AIError.ConfigurationError("Vertex service-account credential must be a JSON object");
+	}
+	const record = parsed as Record<string, unknown>;
+	if (record.type !== "service_account") {
+		throw new AIError.ConfigurationError('Vertex service-account credential must have type "service_account"');
+	}
+	if (typeof record.client_email !== "string" || record.client_email.length === 0) {
+		throw new AIError.ConfigurationError("Vertex service-account credential is missing client_email");
+	}
+	if (typeof record.private_key !== "string" || record.private_key.length === 0) {
+		throw new AIError.ConfigurationError("Vertex service-account credential is missing private_key");
+	}
+	if (record.private_key_id !== undefined && typeof record.private_key_id !== "string") {
+		throw new AIError.ConfigurationError("Vertex service-account credential has an invalid private_key_id");
+	}
+	if (record.project_id !== undefined && typeof record.project_id !== "string") {
+		throw new AIError.ConfigurationError("Vertex service-account credential has an invalid project_id");
+	}
+	return {
+		type: "service_account",
+		client_email: record.client_email,
+		private_key: record.private_key,
+		...(record.private_key_id ? { private_key_id: record.private_key_id } : {}),
+		...(record.project_id ? { project_id: record.project_id } : {}),
+	};
+}
 
 interface TokenResponse {
 	access_token: string;
@@ -145,6 +181,31 @@ async function exchangeJwtForToken(
 	);
 	const body = new URLSearchParams({ grant_type: JWT_BEARER_GRANT, assertion });
 	return postForToken(OAUTH_TOKEN_URL, body, signal, fetchImpl);
+}
+
+export interface VertexServiceAccountTokenOptions {
+	signal?: AbortSignal;
+	fetch?: FetchImpl;
+}
+
+export interface VertexServiceAccountToken {
+	accessToken: string;
+	expiresInMs: number;
+}
+
+export async function mintVertexServiceAccountAccessToken(
+	credentials: ServiceAccountCredentials,
+	options?: VertexServiceAccountTokenOptions,
+): Promise<VertexServiceAccountToken> {
+	const token = await exchangeJwtForToken(
+		credentials,
+		options?.signal,
+		options?.fetch ?? globalThis.fetch.bind(globalThis),
+	);
+	return {
+		accessToken: token.access_token,
+		expiresInMs: Math.max(0, token.expires_in * 1000),
+	};
 }
 
 async function exchangeRefreshToken(
