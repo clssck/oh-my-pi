@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added broker-managed Google Vertex service-account authentication that keeps private keys in the broker and exposes only short-lived bearer metadata to clients.
+
+### Fixed
+
+- Fixed auth-gateway Responses routing to preserve inline base64 images and original detail metadata through native replay.
 
 ## [18.0.0] - 2026-08-22
 

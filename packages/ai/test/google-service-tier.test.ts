@@ -24,14 +24,16 @@ async function drain(stream: AsyncIterable<AssistantMessageEvent>): Promise<void
 }
 
 interface Captured {
+	url: string;
 	headers: Headers;
 	body: Record<string, unknown>;
 }
 
 function capturingFetch(): { fetch: FetchImpl; captured: () => Captured } {
 	let cap: Captured | undefined;
-	const fetch: FetchImpl = async (_url, init) => {
+	const fetch: FetchImpl = async (input, init) => {
 		cap = {
+			url: input instanceof Request ? input.url : input.toString(),
 			headers: new Headers(init?.headers),
 			body: JSON.parse(String(init?.body ?? "{}")),
 		};
@@ -104,6 +106,24 @@ describe("Google service tier wire encoding", () => {
 		const { headers, body } = captured();
 		expect(headers.get("X-Vertex-AI-LLM-Shared-Request-Type")).toBe("priority");
 		expect(body.serviceTier).toBeUndefined();
+	});
+
+	it("Vertex uses broker OAuth metadata as a bearer credential", async () => {
+		const { fetch, captured } = capturingFetch();
+		await drain(
+			streamGoogleVertex(vertexModel, context, {
+				apiKey: JSON.stringify({
+					token: "broker-access-token",
+					projectId: "broker-project",
+					location: "europe-west4",
+				}),
+				fetch,
+			}),
+		);
+		const { url, headers } = captured();
+		expect(url).toContain("/projects/broker-project/locations/europe-west4/");
+		expect(headers.get("Authorization")).toBe("Bearer broker-access-token");
+		expect(headers.get("x-goog-api-key")).toBeNull();
 	});
 
 	it("Vertex omits both header and body for flex (no documented control)", async () => {

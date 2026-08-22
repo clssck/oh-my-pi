@@ -940,6 +940,7 @@ export class RemoteAuthCredentialStore implements AuthCredentialStore {
 			accountId: refreshed.accountId,
 			email: refreshed.email,
 			projectId: refreshed.projectId,
+			location: refreshed.location,
 			enterpriseUrl: refreshed.enterpriseUrl,
 		};
 	}
