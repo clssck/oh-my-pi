@@ -20,6 +20,7 @@ const ENV_KEYS = [
 	"XAI_OAUTH_TOKEN",
 	"UMANS_AI_CODING_PLAN_API_KEY",
 	"LLAMA_CPP_API_KEY",
+	"RUNINFRA_API_KEY",
 	"WANDB_API_KEY",
 ] as const;
 const originalEnv = new Map(ENV_KEYS.map(key => [key, Bun.env[key]]));
@@ -47,6 +48,8 @@ describe("provider registry auth surface", () => {
 		expect(getEnvApiKey("umans")).toBe("umans-env");
 		Bun.env.LLAMA_CPP_API_KEY = "llama-env";
 		expect(getEnvApiKey("llama.cpp")).toBe("llama-env");
+		Bun.env.RUNINFRA_API_KEY = "runinfra-env";
+		expect(getEnvApiKey("runinfra")).toBe("runinfra-env");
 		// Exa is derived from the provider registry's `envKeys` definition.
 		expect(getEnvApiKey("exa")).toBe("exa-env");
 	});
@@ -68,6 +71,7 @@ describe("provider registry auth surface", () => {
 		expect(ids).toContain("exa");
 		expect(ids).toContain("umans");
 		expect(ids).toContain("llama.cpp");
+		expect(ids).toContain("runinfra");
 		// openai has no interactive login flow.
 		expect(ids).not.toContain("openai");
 	});

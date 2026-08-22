@@ -55,6 +55,7 @@ import { parallelProvider } from "./parallel";
 import { perplexityProvider } from "./perplexity";
 import { qianfanProvider } from "./qianfan";
 import { qwenPortalProvider } from "./qwen-portal";
+import { runInfraProvider } from "./runinfra";
 import { sakanaProvider } from "./sakana";
 import { siliconflowProvider } from "./siliconflow";
 import { siliconflowCnProvider } from "./siliconflow-cn";
@@ -110,6 +111,7 @@ const ALL = [
 	zhipuCodingPlanProvider,
 	umansProvider,
 	qwenPortalProvider,
+	runInfraProvider,
 	sakanaProvider,
 	minimaxCodeProvider,
 	minimaxCodeCnProvider,
