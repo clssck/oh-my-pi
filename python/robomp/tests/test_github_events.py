@@ -7,6 +7,7 @@ import pytest
 
 from robomp.github_events import (
     extract_mention,
+    is_direct_implementation_request,
     is_implementation_authorizer,
     is_maintainer,
     rate_limit_cap,
@@ -543,6 +544,36 @@ def test_rate_limit_cap_default_tier_for_unknown_and_first_timer() -> None:
         ), assoc
 
 
+def test_rate_limit_cap_no_association_trust_caps_owner() -> None:
+    # With trust_associations disabled, OWNER/MEMBER/COLLABORATOR/CONTRIBUTOR get
+    # no bypass or tier -- only the explicit allowlist exempts; everyone else falls
+    # to the default cap.
+    for assoc in ("OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"):
+        assert (
+            rate_limit_cap(
+                "owner",
+                assoc,
+                unlimited=frozenset(),
+                default=1,
+                contributor=10,
+                trust_associations=False,
+            )
+            == 1
+        ), assoc
+    # The explicit allowlist still exempts even when association trust is off.
+    assert (
+        rate_limit_cap(
+            "owner",
+            "OWNER",
+            unlimited=frozenset({"owner"}),
+            default=1,
+            contributor=10,
+            trust_associations=False,
+        )
+        is None
+    )
+
+
 # ---------- mention + directive ----------
 
 
@@ -757,6 +788,40 @@ def test_route_directive_unset_for_maintainer_without_mention() -> None:
         bot_login=BOT,
     )
     assert decision.directive is False
+
+
+def test_is_direct_implementation_request_requires_explicit_action() -> None:
+    assert is_direct_implementation_request("Create a PR implementing this. This is authorized.")
+    assert is_direct_implementation_request("go ahead")
+    assert is_direct_implementation_request("fix this")
+    assert is_direct_implementation_request("implement that")
+    assert not is_direct_implementation_request("looks good to me")
+    assert not is_direct_implementation_request("thanks for the report")
+    assert not is_direct_implementation_request("I do not think we should implement this yet")
+    assert not is_direct_implementation_request("I will fix the flaky test myself later")
+    assert not is_direct_implementation_request("we need to fix the CI config")
+
+
+def test_route_directive_set_for_owner_direct_implementation_request_without_mention() -> None:
+    decision = route(
+        "issue_comment",
+        {
+            "action": "created",
+            "comment": {
+                "user": {"login": "can1357"},
+                "author_association": "OWNER",
+                "body": "Create a PR implementing this. This is authorized.",
+            },
+            "issue": {"number": 9},
+            "repository": {"full_name": "octo/widget"},
+        },
+        allowlist=ALLOWLIST,
+        bot_login=BOT,
+    )
+    assert decision.directive is True
+    assert decision.directive_body == "Create a PR implementing this. This is authorized."
+    assert decision.directive_author == "can1357"
+    assert decision.directive_authorizes_impl is True
 
 
 def test_route_directive_on_incoming_pr_conversation_is_ignored() -> None:

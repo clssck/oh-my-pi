@@ -274,3 +274,16 @@ def test_release_todo_phases_end_in_retag() -> None:
     phases = persona.seed_phases("handle_release_ci")
     assert [phase["name"] for phase in phases] == ["Diagnose", "Fix", "Retag"]
     assert phases[-1]["tasks"][-1] == "Call release_retag and end the turn"
+
+
+def test_directive_ack_comment_quotes_request_and_marks() -> None:
+    body = persona.directive_ack_comment(author="octo", request="please add a PDF export button", comment_id=42)
+    assert "@octo" in body  # addresses the requester
+    assert "PDF export button" in body  # echoes the actual request, not a static template
+    assert "robomp-ack:42" in body  # idempotency marker keyed to the comment
+
+
+def test_directive_ack_comment_truncates_long_request() -> None:
+    body = persona.directive_ack_comment(author="octo", request="x" * 500, comment_id=1)
+    assert "…" in body  # long requests are clipped
+    assert len(body) < 350  # not the full 500-char request

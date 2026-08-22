@@ -193,6 +193,17 @@ def is_implementation_authorizer(
     return False
 
 
+_DIRECT_IMPLEMENTATION_RE = re.compile(
+    r"(?:^|[.!?]\s+|\n+\s*)(?:please\s+)?(?:go\s+ahead|do\s+it|ship\s+it|(?:create|open|make|send)\s+(?:a\s+)?(?:pr|pull\s+request)|implement\s+(?:this|it|that)|fix\s+(?:this|it|that))\b",
+    re.IGNORECASE,
+)
+
+
+def is_direct_implementation_request(body: str | None) -> bool:
+    """Return whether a maintainer comment explicitly asks the bot to implement."""
+    return isinstance(body, str) and _DIRECT_IMPLEMENTATION_RE.search(body) is not None
+
+
 def _pr_review_pr(pr: Mapping[str, Any], repo: str, action: str, bot_login: str) -> RouteDecision:
     """Build a `review_pr` decision for an incoming PR, or the matching skip."""
     if str(pr.get("state") or "open") != "open":
@@ -308,7 +319,23 @@ def route(
             return {}
         stripped = extract_mention(body, bot_login)
         if stripped is None:
-            return {}
+            if not (
+                is_implementation_authorizer(login, assoc, maintainers=maintainers)
+                and is_direct_implementation_request(body)
+            ):
+                return {}
+            # An owner/allowlisted maintainer who plainly asks for the work needs
+            # no `@bot` mention -- the ask itself is the authorization.
+            cleaned, pragmas = parse_pragmas(body)
+            if not cleaned.strip():
+                return {}
+            return {
+                "directive": True,
+                "directive_body": cleaned,
+                "directive_author": login,
+                "directive_pragmas": pragmas,
+                "directive_authorizes_impl": True,
+            }
         cleaned, pragmas = parse_pragmas(stripped)
         authorizes_impl = is_implementation_authorizer(login, assoc, maintainers=maintainers)
         return {
@@ -439,15 +466,19 @@ def rate_limit_cap(
     unlimited: frozenset[str],
     default: int,
     contributor: int,
+    trust_associations: bool = True,
 ) -> int | None:
     """Return the per-window submission cap for a submitter, or `None` for unlimited.
 
     Precedence: explicit `unlimited` allowlist > trusted GitHub association
     (`OWNER`/`MEMBER`/`COLLABORATOR`) > `CONTRIBUTOR` tier > default tier.
+    When `trust_associations` is False, GitHub `author_association` grants no
+    bypass or tier at all -- only the explicit `unlimited` allowlist exempts a
+    submitter, so even repo owners fall to the default cap.
     """
     if login.lower() in unlimited:
         return None
-    if association:
+    if trust_associations and association:
         upper = association.upper()
         if upper in TRUSTED_ASSOCIATIONS:
             return None
@@ -461,6 +492,7 @@ __all__ = [
     "RouteDecision",
     "TRUSTED_ASSOCIATIONS",
     "extract_mention",
+    "is_direct_implementation_request",
     "is_maintainer",
     "is_implementation_authorizer",
     "rate_limit_cap",

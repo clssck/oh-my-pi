@@ -68,6 +68,16 @@ class Settings(BaseSettings):
     model: str = Field("anthropic/claude-sonnet-4-6", alias="ROBOMP_MODEL")
     provider: str | None = Field(None, alias="ROBOMP_PROVIDER")
     thinking_level: ThinkingLevel = Field("high", alias="ROBOMP_THINKING")
+    # Dynamic directive acknowledgment. When enabled, robomp asks the in-stack
+    # gateway for a short, contextual "on it" reply (referencing the actual ask)
+    # BEFORE the agent run; any failure falls back to the static template. OFF by
+    # default so standalone installs (no `gateway` service) don't pay a timeout
+    # per directive — the robomp deploy command sets ROBOMP_ACK_DYNAMIC=true.
+    ack_dynamic: bool = Field(False, alias="ROBOMP_ACK_DYNAMIC")
+    ack_model: str = Field("openai-codex/gpt-5.5", alias="ROBOMP_ACK_MODEL")
+    ack_gateway_chat_url: str = Field("http://gateway:4000/v1/chat/completions", alias="ROBOMP_ACK_GATEWAY_URL")
+    ack_timeout_seconds: float = Field(20.0, alias="ROBOMP_ACK_TIMEOUT_SECONDS")
+    ack_max_tokens: int = Field(300, alias="ROBOMP_ACK_MAX_TOKENS")
 
     # Runtime
     max_concurrency: int = Field(8, alias="ROBOMP_MAX_CONCURRENCY")
@@ -124,6 +134,11 @@ class Settings(BaseSettings):
     rate_limit_default: int = Field(3, alias="ROBOMP_RATE_LIMIT_DEFAULT")
     rate_limit_contributor: int = Field(10, alias="ROBOMP_RATE_LIMIT_CONTRIBUTOR")
     rate_limit_unlimited_raw: str = Field("", alias="ROBOMP_RATE_LIMIT_UNLIMITED")
+    # When False, GitHub `author_association` (OWNER/MEMBER/COLLABORATOR/CONTRIBUTOR)
+    # grants no rate-limit bypass or tier -- only `ROBOMP_RATE_LIMIT_UNLIMITED`
+    # exempts a submitter. Lets a deployment throttle even repo owners. Default
+    # True preserves the original association-trusting behavior.
+    rate_limit_trust_associations: bool = Field(True, alias="ROBOMP_RATE_LIMIT_TRUST_ASSOCIATIONS")
     # Logins (comma-separated, `@` prefix optional, case-insensitive) whose `@bot_login`
     # mentions are treated as authoritative directives. These accounts also
     # bypass rate limiting regardless of `author_association`.
