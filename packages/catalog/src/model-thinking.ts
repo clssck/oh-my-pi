@@ -187,11 +187,16 @@ function fillThinkingWireDefaults<TApi extends Api>(
 		supportsAdaptiveThinkingDisplay(spec.id);
 	const needsRequiresEffort =
 		thinking.requiresEffort === undefined &&
-		(impliesMandatoryReasoning(parsed, spec.id) ||
+1: 		(impliesMandatoryReasoning(parsed, spec) ||
 			isQwenTemplateReasoningEffortCompat(compat) ||
 			isOpenCodeGatewayOxAlphaModel(spec));
+2: 	if (
+		impliesMandatoryReasoning(parsed, spec) ||
+		isQwenTemplateReasoningEffortCompat(compat) ||
+		isOpenCodeGatewayOxAlphaModel(spec)
+	) {
 	const needsDefaultLevel =
-		thinking.defaultLevel === undefined && (isKimiK3ModelId(spec.id) || isGlm53ReasoningEffortModelId(spec.id));
+		thinking.defaultLevel === undefined && (isKimiK3Spec(spec) || isGlm53ReasoningEffortModelId(spec.id));
 	if (!effortsChanged && !shouldReplaceEffortMap && !needsDisplay && !needsRequiresEffort && !needsDefaultLevel) {
 		return thinking;
 	}
@@ -229,7 +234,7 @@ export function deriveThinking<TApi extends Api>(spec: ModelSpec<TApi>, compat: 
 		mode: inferThinkingControlMode(spec, parsed),
 		efforts,
 	};
-	if (isKimiK3ModelId(spec.id) || isGlm53ReasoningEffortModelId(spec.id)) {
+	if (isKimiK3Spec(spec) || isGlm53ReasoningEffortModelId(spec.id)) {
 		config.defaultLevel = Effort.Max;
 	}
 	const effortMap = inferEffortMap(spec, compat, config.mode, config.efforts);
@@ -242,8 +247,11 @@ export function deriveThinking<TApi extends Api>(spec: ModelSpec<TApi>, compat: 
 	) {
 		config.supportsDisplay = true;
 	}
-	if (
-		impliesMandatoryReasoning(parsed, spec.id) ||
+1: 		(impliesMandatoryReasoning(parsed, spec) ||
+			isQwenTemplateReasoningEffortCompat(compat) ||
+			isOpenCodeGatewayOxAlphaModel(spec));
+2: 	if (
+		impliesMandatoryReasoning(parsed, spec) ||
 		isQwenTemplateReasoningEffortCompat(compat) ||
 		isOpenCodeGatewayOxAlphaModel(spec)
 	) {
@@ -302,6 +310,13 @@ function sameEffortList(left: readonly Effort[], right: readonly Effort[]): bool
 
 function isOpenAICompatReasoningApi(api: Api): boolean {
 	return api === "openai-completions" || api === "openrouter";
+}
+/** Kimi K3 family ids (via `isKimiK3ModelId`) or the kimi-code dialect's
+ * bare `k3` ids (`k3`, `k3-256k`, discovered `k3-*` aliases), which carry
+ * no family token in their id. One lockstep truth for the ladder, default
+ * level, and mandatory-reasoning decisions shared by the fill/derive paths. */
+function isKimiK3Spec<TApi extends Api>(spec: ModelSpec<TApi>): boolean {
+	return isKimiK3ModelId(spec.id) || (spec.provider === "kimi-code" && /^k3(?:[._:-]|$)/i.test(spec.id));
 }
 
 /**
@@ -371,7 +386,7 @@ function getModelDefinedEfforts<TApi extends Api>(
 			return DEFAULT_REASONING_EFFORTS_WITH_MAX;
 		}
 	}
-	if (isKimiK3ModelId(spec.id)) {
+	if (isKimiK3Spec(spec)) {
 		return LOW_HIGH_MAX_REASONING_EFFORTS;
 	}
 	if (isOpenCodeGatewayOxAlphaModel(spec)) {
@@ -655,18 +670,18 @@ const OPENAI_O_SERIES_RE = /^o[134](?:$|[-:.])/i;
  *   (variant-collapse) and the collapsed entry owns off — this floor protects
  *   the orphans.
  */
-function impliesMandatoryReasoning(parsed: ParsedModel, modelId: string): boolean {
+function impliesMandatoryReasoning<TApi extends Api>(parsed: ParsedModel, spec: ModelSpec<TApi>): boolean {
 	if (parsed.family === "gemini") {
 		if (semverGte(parsed.version, "3.0")) return true;
 		if (parsed.kind === "pro" && semverGte(parsed.version, "2.5")) return true;
 	}
-	if (isKimiK3ModelId(modelId)) return true;
+	if (isKimiK3Spec(spec)) return true;
 	// GLM-5.3+ no longer supports disabling thinking — thinking.type must
 	// always be "enabled". Floor thinking-off requests to the lowest effort.
-	if (isGlm53ReasoningEffortModelId(modelId)) return true;
-	if (isMinimaxM2FamilyModelId(modelId)) return true;
-	if (OPENAI_O_SERIES_RE.test(bareModelId(modelId))) return true;
-	return findThinkingVariantToken(modelId) !== undefined;
+	if (isGlm53ReasoningEffortModelId(spec.id)) return true;
+	if (isMinimaxM2FamilyModelId(spec.id)) return true;
+	if (OPENAI_O_SERIES_RE.test(bareModelId(spec.id))) return true;
+	return findThinkingVariantToken(spec.id) !== undefined;
 }
 
 function inferAnthropicSupportedEfforts<TApi extends Api>(
