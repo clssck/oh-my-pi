@@ -138,6 +138,9 @@ export async function getOAuthApiKey(
 	}
 	// Providers declaring `api-key-format "structured"` need request-time
 	// credential metadata, so the API key is the JSON-encoded credential.
+	// `google-vertex` carries broker-minted short-lived bearer metadata:
+	// location travels with the credential, and the broker's service-account
+	// refresh token never crosses to the gateway (undefined → omitted).
 	const apiKey =
 		policy?.apiKeyFormat === "structured"
 			? JSON.stringify({
@@ -145,7 +148,8 @@ export async function getOAuthApiKey(
 					token: creds.access,
 					enterpriseUrl: creds.enterpriseUrl,
 					projectId: creds.projectId,
-					refreshToken: creds.refresh,
+					location: creds.location,
+					refreshToken: provider === "google-vertex" ? undefined : creds.refresh,
 					expiresAt: creds.expires,
 					email: creds.email,
 					accountId: creds.accountId,

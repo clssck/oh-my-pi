@@ -3,7 +3,12 @@ import { Buffer } from "node:buffer";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { __resetVertexTokenCache, getVertexAccessToken } from "../../src/providers/google-auth";
+import {
+	__resetVertexTokenCache,
+	getVertexAccessToken,
+	mintVertexServiceAccountAccessToken,
+	parseVertexServiceAccountJson,
+} from "../../src/providers/google-auth";
 import type { FetchImpl } from "../../src/types";
 
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
@@ -30,6 +35,51 @@ function urlOf(input: string | URL | Request): string {
 	if (input instanceof URL) return input.toString();
 	return input.url;
 }
+
+describe("Vertex broker service-account credentials", () => {
+	it("validates service-account JSON and mints a scoped bearer token", async () => {
+		const pem = await generateServiceAccountPem();
+		const credentials = parseVertexServiceAccountJson(
+			JSON.stringify({
+				type: "service_account",
+				client_email: "vertex-broker@example.iam.gserviceaccount.com",
+				private_key: pem,
+				private_key_id: "key-1",
+				project_id: "vertex-project",
+			}),
+		);
+		let tokenRequest: RequestInit | undefined;
+		const fetchImpl: FetchImpl = async (input, init) => {
+			expect(urlOf(input)).toBe("https://oauth2.googleapis.com/token");
+			tokenRequest = init;
+			return Response.json({ access_token: "broker-access-token", expires_in: 3600 });
+		};
+
+		const token = await mintVertexServiceAccountAccessToken(credentials, { fetch: fetchImpl });
+
+		expect(token).toEqual({ accessToken: "broker-access-token", expiresInMs: 3_600_000 });
+		const body = new URLSearchParams(String(tokenRequest?.body));
+		expect(body.get("grant_type")).toBe(JWT_BEARER_GRANT);
+		const assertion = body.get("assertion");
+		expect(assertion?.split(".")).toHaveLength(3);
+		const payload = JSON.parse(Buffer.from(assertion!.split(".")[1]!, "base64url").toString("utf8")) as Record<
+			string,
+			unknown
+		>;
+		expect(payload.iss).toBe("vertex-broker@example.iam.gserviceaccount.com");
+		expect(payload.scope).toBe(CLOUD_PLATFORM_SCOPE);
+		expect(payload.aud).toBe("https://oauth2.googleapis.com/token");
+		expect(credentials.project_id).toBe("vertex-project");
+	});
+
+	it("rejects JSON that does not contain a service-account private key", () => {
+		expect(() =>
+			parseVertexServiceAccountJson(
+				JSON.stringify({ type: "service_account", client_email: "missing-key@example.iam.gserviceaccount.com" }),
+			),
+		).toThrow("missing private_key");
+	});
+});
 
 describe("getVertexAccessToken impersonated_service_account ADC", () => {
 	let tmpDir: string;
