@@ -263,6 +263,29 @@ describe("generated model policies", () => {
 		]);
 	});
 
+	it("preserves RunInfra's provider-authored qwen3.8 effort ladder", () => {
+		const models = [
+			createSpec({
+				id: "qwen3-8-27b",
+				api: "openai-completions",
+				provider: "runinfra",
+				thinking: {
+					mode: "effort",
+					efforts: [Effort.Low, Effort.High],
+					defaultLevel: Effort.High,
+				},
+			}),
+		];
+
+		applyGeneratedModelPolicies(models);
+
+		expect(models[0]?.thinking).toEqual({
+			mode: "effort",
+			efforts: [Effort.Low, Effort.High],
+			defaultLevel: Effort.High,
+		});
+	});
+
 	it("pins zai glm-5.2 base id to 1M context", () => {
 		const models = [
 			createSpec({

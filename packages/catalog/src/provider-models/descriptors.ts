@@ -43,6 +43,7 @@ import {
 	openrouterModelManagerOptions,
 	qianfanModelManagerOptions,
 	qwenPortalModelManagerOptions,
+	runInfraModelManagerOptions,
 	sakanaModelManagerOptions,
 	siliconflowCnModelManagerOptions,
 	siliconflowModelManagerOptions,
@@ -388,6 +389,14 @@ export const CATALOG_PROVIDERS = [
 			label: "Qwen Portal",
 			oauthProvider: "qwen-portal",
 		},
+	},
+	{
+		id: "runinfra",
+		defaultModel: "deepseek-v4-pro",
+		envVars: ["RUNINFRA_API_KEY"],
+		createModelManagerOptions: (config: ModelManagerConfig) => runInfraModelManagerOptions(config),
+		dynamicModelsAuthoritative: true,
+		catalogDiscovery: { label: "RunInfra" },
 	},
 	{
 		id: "sakana",
