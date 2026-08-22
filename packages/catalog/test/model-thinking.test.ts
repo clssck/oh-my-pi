@@ -526,6 +526,13 @@ describe("model thinking derivation", () => {
 			provider: "google",
 		});
 		expect(legacyFlash.thinking?.requiresEffort).toBeUndefined();
+		const flash37 = createModel({
+			id: "gemini-3.7-flash",
+			api: "google-generative-ai",
+			provider: "google",
+		});
+		expect(flash37.thinking?.efforts).toEqual([Effort.Low, Effort.Medium, Effort.High]);
+		expect(minimumSupportedEffort(flash37)).toBe(Effort.Low);
 
 		// Backfill: explicit (pre-flag) baked thinking gains the wire fact;
 		// explicit `false` wins over identity.
