@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added auth-gateway provider allowlists for broker-backed and explicitly host-authenticated providers, including structured Google Vertex credential probes.
+
+### Fixed
+
+- Fixed unsupported ACP MCP transports to fail with a defensive transport error instead of falling through an invalid server shape.
 
 ## [18.0.10] - 2026-08-28
 
