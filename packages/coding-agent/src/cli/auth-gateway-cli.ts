@@ -455,6 +455,9 @@ async function runStatus(flags: AuthGatewayCommandArgs["flags"]): Promise<void> 
 }
 
 export async function runAuthGatewayCommand(cmd: AuthGatewayCommandArgs): Promise<void> {
+	if (cmd.action !== "serve" && cmd.flags.providers !== undefined) {
+		throw new Error("--providers is only supported by `auth-gateway serve`");
+	}
 	switch (cmd.action) {
 		case "serve":
 			await runServe(cmd.flags);

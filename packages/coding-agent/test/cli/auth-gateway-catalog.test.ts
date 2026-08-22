@@ -7,6 +7,7 @@ import {
 	indexModelsByRequestId,
 	isHostAuthenticatedProvider,
 	resolveRoutableProviders,
+	runAuthGatewayCommand,
 } from "../../src/cli/auth-gateway-cli";
 import { ModelRegistry } from "../../src/config/model-registry";
 
@@ -241,5 +242,15 @@ describe("composeProbeApiKey (auth-gateway structured probe credentials)", () =>
 		expect(composeProbeApiKey("anthropic", { type: "oauth", accessToken: "anthropic-token" })).toBe(
 			"anthropic-token",
 		);
+	});
+});
+describe("runAuthGatewayCommand provider filtering", () => {
+	test("rejects a serve-only provider filter on check", async () => {
+		await expect(
+			runAuthGatewayCommand({
+				action: "check",
+				flags: { providers: ["openai-codex"] },
+			}),
+		).rejects.toThrow("--providers is only supported by `auth-gateway serve`");
 	});
 });
