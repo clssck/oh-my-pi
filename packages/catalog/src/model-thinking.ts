@@ -187,14 +187,9 @@ function fillThinkingWireDefaults<TApi extends Api>(
 		supportsAdaptiveThinkingDisplay(spec.id);
 	const needsRequiresEffort =
 		thinking.requiresEffort === undefined &&
-1: 		(impliesMandatoryReasoning(parsed, spec) ||
+		(impliesMandatoryReasoning(parsed, spec) ||
 			isQwenTemplateReasoningEffortCompat(compat) ||
 			isOpenCodeGatewayOxAlphaModel(spec));
-2: 	if (
-		impliesMandatoryReasoning(parsed, spec) ||
-		isQwenTemplateReasoningEffortCompat(compat) ||
-		isOpenCodeGatewayOxAlphaModel(spec)
-	) {
 	const needsDefaultLevel =
 		thinking.defaultLevel === undefined && (isKimiK3Spec(spec) || isGlm53ReasoningEffortModelId(spec.id));
 	if (!effortsChanged && !shouldReplaceEffortMap && !needsDisplay && !needsRequiresEffort && !needsDefaultLevel) {
@@ -247,10 +242,7 @@ export function deriveThinking<TApi extends Api>(spec: ModelSpec<TApi>, compat: 
 	) {
 		config.supportsDisplay = true;
 	}
-1: 		(impliesMandatoryReasoning(parsed, spec) ||
-			isQwenTemplateReasoningEffortCompat(compat) ||
-			isOpenCodeGatewayOxAlphaModel(spec));
-2: 	if (
+	if (
 		impliesMandatoryReasoning(parsed, spec) ||
 		isQwenTemplateReasoningEffortCompat(compat) ||
 		isOpenCodeGatewayOxAlphaModel(spec)

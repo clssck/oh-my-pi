@@ -28,7 +28,7 @@
 			},
 			"requiresGlyphTokenization": false,
 			"tokenizer": "deepseek-v3",
-
+			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
@@ -105,7 +105,7 @@
 			},
 			"requiresGlyphTokenization": false,
 			"tokenizer": "deepseek-v3",
-
+			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
@@ -346,7 +346,7 @@
 			},
 			"requiresGlyphTokenization": false,
 			"tokenizer": "kimi-k2",
-
+			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
@@ -657,7 +657,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 262144,
-			"maxTokens": 262144,
+			"maxTokens": 81920,
 			"thinking": {
 				"mode": "effort",
 				"efforts": [
@@ -669,7 +669,7 @@
 			},
 			"requiresGlyphTokenization": false,
 			"tokenizer": "qwen3",
-
+			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": false,
 				"supportsDeveloperRole": false,
@@ -748,7 +748,7 @@
 			},
 			"requiresGlyphTokenization": false,
 			"tokenizer": "glm5",
-
+			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
@@ -73304,9 +73304,9 @@
 				"text"
 			],
 			"cost": {
-				"input": 0.04,
-				"output": 0.08,
-				"cacheRead": 0.008,
+				"input": 0.035,
+				"output": 0.13,
+				"cacheRead": 0.01,
 				"cacheWrite": 0
 			},
 			"contextWindow": 1048576,
@@ -129188,9 +129188,9 @@
 				"image"
 			],
 			"cost": {
-				"input": 0.22,
-				"output": 0.66,
-				"cacheRead": 0.007,
+				"input": 0.44,
+				"output": 1.32,
+				"cacheRead": 0.014,
 				"cacheWrite": 0
 			},
 			"contextWindow": 1048576,
@@ -184793,6 +184793,85 @@
 				"dropThinkingWhenReasoningEffort": false
 			},
 			"supportsComputerUseConfig": false
+		},
+		"deepseek/deepseek-v4-flash-vision-exp": {
+			"id": "deepseek/deepseek-v4-flash-vision-exp",
+			"name": "DeepSeek V4 Flash Vision Exp",
+			"api": "openai-completions",
+			"provider": "novita",
+			"baseUrl": "https://api.novita.ai/openai/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0.44,
+				"output": 1.32,
+				"cacheRead": 0.028,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 393216,
+			"supportsTools": true,
+			"requiresGlyphTokenization": false,
+			"tokenizer": "deepseek-v3",
+			"thinking": {
+				"mode": "effort",
+				"efforts": [
+					"low",
+					"high",
+					"max"
+				]
+			},
+			"compat": {
+				"supportsStore": true,
+				"supportsDeveloperRole": false,
+				"supportsMultipleSystemMessages": true,
+				"supportsReasoningEffort": true,
+				"supportsReasoningParams": true,
+				"supportsSamplingParams": true,
+				"supportsPenaltyAndStopParams": true,
+				"reasoningEffortMap": {},
+				"supportsUsageInStreaming": true,
+				"alwaysSendMaxTokens": false,
+				"disableReasoningOnForcedToolChoice": false,
+				"disableReasoningOnToolChoice": true,
+				"supportsToolChoice": true,
+				"supportsForcedToolChoice": true,
+				"supportsNamedToolChoice": true,
+				"maxTokensField": "max_completion_tokens",
+				"requiresToolResultName": false,
+				"requiresAssistantAfterToolResult": false,
+				"requiresThinkingAsText": false,
+				"requiresMistralToolIds": false,
+				"thinkingFormat": "openai",
+				"reasoningDisableMode": "lowest-effort",
+				"omitReasoningEffort": false,
+				"includeEncryptedReasoning": true,
+				"filterReasoningHistory": false,
+				"reasoningContentField": "reasoning_content",
+				"requiresReasoningContentForToolCalls": true,
+				"requiresReasoningContentForAllAssistantTurns": true,
+				"allowsSyntheticReasoningContentForToolCalls": false,
+				"replayReasoningContent": false,
+				"qwenPreserveThinking": false,
+				"qwenTemplateReasoningEffort": false,
+				"requiresAssistantContentForToolCalls": false,
+				"supportsPromptCacheBreakpoints": false,
+				"isOpenRouterHost": false,
+				"wireModelIdMode": "raw",
+				"isVercelGatewayHost": false,
+				"supportsStrictMode": false,
+				"toolStrictMode": "mixed",
+				"stripDeepseekSpecialTokens": false,
+				"streamMarkupHealingPattern": "thinking",
+				"reasoningDeltasMayBeCumulative": false,
+				"emptyLengthFinishIsContextError": false,
+				"usesOpenAIToolCallIdLimit": false,
+				"dropThinkingWhenReasoningEffort": false
+			},
+			"supportsComputerUse": false
 		},
 		"deepseek/deepseek-v4-pro": {
 			"id": "deepseek/deepseek-v4-pro",
@@ -260179,6 +260258,74 @@
 			},
 			"supportsComputerUse": false
 		},
+		"parakeet-tdt-0-6b-v3": {
+			"id": "parakeet-tdt-0-6b-v3",
+			"name": "parakeet-tdt-0-6b-v3",
+			"api": "openai-completions",
+			"provider": "runinfra",
+			"baseUrl": "https://api.runinfra.ai/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": null,
+			"maxTokens": null,
+			"requiresGlyphTokenization": false,
+			"compat": {
+				"supportsStore": true,
+				"supportsDeveloperRole": false,
+				"supportsMultipleSystemMessages": false,
+				"supportsReasoningEffort": true,
+				"supportsReasoningParams": true,
+				"supportsSamplingParams": true,
+				"supportsPenaltyAndStopParams": true,
+				"reasoningEffortMap": {},
+				"supportsUsageInStreaming": true,
+				"alwaysSendMaxTokens": false,
+				"disableReasoningOnForcedToolChoice": false,
+				"disableReasoningOnToolChoice": false,
+				"supportsToolChoice": true,
+				"supportsForcedToolChoice": true,
+				"supportsNamedToolChoice": true,
+				"maxTokensField": "max_completion_tokens",
+				"requiresToolResultName": false,
+				"requiresAssistantAfterToolResult": false,
+				"requiresThinkingAsText": false,
+				"requiresMistralToolIds": false,
+				"thinkingFormat": "openai",
+				"reasoningDisableMode": "lowest-effort",
+				"omitReasoningEffort": false,
+				"includeEncryptedReasoning": true,
+				"filterReasoningHistory": false,
+				"reasoningContentField": "reasoning_content",
+				"requiresReasoningContentForToolCalls": false,
+				"requiresReasoningContentForAllAssistantTurns": false,
+				"allowsSyntheticReasoningContentForToolCalls": true,
+				"replayReasoningContent": false,
+				"qwenPreserveThinking": false,
+				"qwenTemplateReasoningEffort": false,
+				"requiresAssistantContentForToolCalls": false,
+				"supportsPromptCacheBreakpoints": false,
+				"isOpenRouterHost": false,
+				"wireModelIdMode": "raw",
+				"isVercelGatewayHost": false,
+				"supportsStrictMode": false,
+				"toolStrictMode": "mixed",
+				"stripDeepseekSpecialTokens": false,
+				"streamMarkupHealingPattern": "thinking",
+				"reasoningDeltasMayBeCumulative": false,
+				"emptyLengthFinishIsContextError": false,
+				"usesOpenAIToolCallIdLimit": false,
+				"dropThinkingWhenReasoningEffort": false
+			},
+			"supportsComputerUse": false
+		},
 		"qwen3-8-2-4t-a95b": {
 			"id": "qwen3-8-2-4t-a95b",
 			"name": "Qwen3.8 2.4T A95B",
@@ -260762,7 +260909,7 @@
 			},
 			"requiresGlyphTokenization": false,
 			"tokenizer": "kimi-k2",
-
+			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
@@ -260815,8 +260962,7 @@
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false,
 				"dropThinkingWhenReasoningEffort": false
-			},
-			"supportsComputerUse": false
+			}
 		},
 		"hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4": {
 			"id": "hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4",
@@ -260847,6 +260993,7 @@
 				]
 			},
 			"requiresGlyphTokenization": false,
+			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
@@ -260893,8 +261040,7 @@
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false,
 				"dropThinkingWhenReasoningEffort": false
-			},
-			"supportsComputerUse": false
+			}
 		},
 		"hf:openai/gpt-oss-120b": {
 			"id": "hf:openai/gpt-oss-120b",
@@ -260923,6 +261069,7 @@
 				]
 			},
 			"requiresGlyphTokenization": false,
+			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
@@ -260969,8 +261116,7 @@
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false,
 				"dropThinkingWhenReasoningEffort": false
-			},
-			"supportsComputerUse": false
+			}
 		},
 		"hf:Qwen/Qwen3.6-27B": {
 			"id": "hf:Qwen/Qwen3.6-27B",
@@ -261002,7 +261148,7 @@
 			},
 			"requiresGlyphTokenization": false,
 			"tokenizer": "qwen3",
-
+			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": false,
 				"supportsDeveloperRole": false,
@@ -261049,8 +261195,7 @@
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false,
 				"dropThinkingWhenReasoningEffort": false
-			},
-			"supportsComputerUse": false
+			}
 		},
 		"hf:Qwen/Qwen3.8-27B": {
 			"id": "hf:Qwen/Qwen3.8-27B",
@@ -261160,6 +261305,7 @@
 				]
 			},
 			"requiresGlyphTokenization": false,
+			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
@@ -261206,8 +261352,7 @@
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false,
 				"dropThinkingWhenReasoningEffort": false
-			},
-			"supportsComputerUse": false
+			}
 		},
 		"hf:zai-org/GLM-5.2": {
 			"id": "hf:zai-org/GLM-5.2",
@@ -261239,7 +261384,7 @@
 			},
 			"requiresGlyphTokenization": false,
 			"tokenizer": "glm5",
-
+			"supportsComputerUse": false,
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
@@ -261286,8 +261431,7 @@
 				"emptyLengthFinishIsContextError": false,
 				"usesOpenAIToolCallIdLimit": false,
 				"dropThinkingWhenReasoningEffort": false
-			},
-			"supportsComputerUse": false
+			}
 		},
 		"syn:large:text": {
 			"id": "syn:large:text",
@@ -299670,6 +299814,85 @@
 				]
 			},
 			"requiresGlyphTokenization": false,
+			"compat": {
+				"supportsStore": true,
+				"supportsDeveloperRole": false,
+				"supportsMultipleSystemMessages": true,
+				"supportsReasoningEffort": true,
+				"supportsReasoningParams": true,
+				"supportsSamplingParams": true,
+				"supportsPenaltyAndStopParams": true,
+				"reasoningEffortMap": {},
+				"supportsUsageInStreaming": true,
+				"alwaysSendMaxTokens": false,
+				"disableReasoningOnForcedToolChoice": false,
+				"disableReasoningOnToolChoice": false,
+				"supportsToolChoice": true,
+				"supportsForcedToolChoice": true,
+				"supportsNamedToolChoice": true,
+				"maxTokensField": "max_completion_tokens",
+				"requiresToolResultName": false,
+				"requiresAssistantAfterToolResult": false,
+				"requiresThinkingAsText": false,
+				"requiresMistralToolIds": false,
+				"thinkingFormat": "openai",
+				"reasoningDisableMode": "lowest-effort",
+				"omitReasoningEffort": false,
+				"includeEncryptedReasoning": true,
+				"filterReasoningHistory": false,
+				"reasoningContentField": "reasoning_content",
+				"requiresReasoningContentForToolCalls": false,
+				"requiresReasoningContentForAllAssistantTurns": false,
+				"allowsSyntheticReasoningContentForToolCalls": true,
+				"replayReasoningContent": false,
+				"qwenPreserveThinking": false,
+				"qwenTemplateReasoningEffort": false,
+				"requiresAssistantContentForToolCalls": false,
+				"supportsPromptCacheBreakpoints": false,
+				"isOpenRouterHost": false,
+				"wireModelIdMode": "raw",
+				"isVercelGatewayHost": false,
+				"supportsStrictMode": true,
+				"toolStrictMode": "mixed",
+				"stripDeepseekSpecialTokens": false,
+				"streamMarkupHealingPattern": "thinking",
+				"reasoningDeltasMayBeCumulative": false,
+				"emptyLengthFinishIsContextError": false,
+				"usesOpenAIToolCallIdLimit": false,
+				"dropThinkingWhenReasoningEffort": false
+			},
+			"supportsComputerUse": false
+		},
+		"google/gemma-4-31b-it": {
+			"id": "google/gemma-4-31b-it",
+			"name": "Gemma 4 31B IT",
+			"api": "openai-completions",
+			"provider": "zenmux",
+			"baseUrl": "https://zenmux.ai/api/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 262144,
+			"maxTokens": 262144,
+			"requiresGlyphTokenization": false,
+			"thinking": {
+				"mode": "effort",
+				"efforts": [
+					"minimal",
+					"low",
+					"medium",
+					"high",
+					"xhigh"
+				]
+			},
 			"compat": {
 				"supportsStore": true,
 				"supportsDeveloperRole": false,
