@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthStorage } from "@oh-my-pi/pi-ai";
+import { Effort } from "@oh-my-pi/pi-catalog/effort";
 import { getBundledModels } from "@oh-my-pi/pi-catalog/models";
 import { TempDir } from "@oh-my-pi/pi-utils";
 import {
 	composeProbeApiKey,
 	indexModelsByRequestId,
 	isHostAuthenticatedProvider,
+	resolveGatewayModel,
 	resolveRoutableProviders,
 	runAuthGatewayCommand,
 } from "../../src/cli/auth-gateway-cli";
@@ -252,5 +254,66 @@ describe("runAuthGatewayCommand provider filtering", () => {
 				flags: { providers: ["openai-codex"] },
 			}),
 		).rejects.toThrow("--providers is only supported by `auth-gateway serve`");
+	});
+});
+
+describe("resolveGatewayModel (bundled fallback for discovery omissions)", () => {
+	const museId = "muse-code/muse-spark-1.3";
+	const routable = new Set(["muse-code"]);
+
+	test("resolves a bundled qualified model omitted from the live index", () => {
+		// Live discovery lags the bundled catalog (egress-split listing):
+		// the index holds the older Muse rows but not 1.3.
+		const live = indexModelsByRequestId(
+			getBundledModels("muse-code").filter(model => model.id !== "muse-spark-1.3"),
+			routable,
+		);
+		expect(live.has(museId)).toBe(false);
+
+		const resolved = resolveGatewayModel(live, routable, museId);
+		const bundled = getBundledModels("muse-code").find(model => model.id === "muse-spark-1.3");
+		if (!bundled) throw new Error("expected bundled muse-spark-1.3");
+		expect(resolved).toEqual(bundled);
+		expect(resolved?.thinking?.efforts).toContain(Effort.Max);
+		expect(live.has(museId)).toBe(false);
+	});
+
+	test("prefers the live index over bundled (discovered precedence)", () => {
+		const registry = new ModelRegistry(stubAuthStorage());
+		registry.registerProvider("muse-code", {
+			baseUrl: "https://api.meta.ai/v1",
+			api: "openai-responses",
+			apiKey: "test-key",
+			models: [
+				{
+					id: "muse-spark-1.3",
+					name: "Muse Spark 1.3 (live)",
+					reasoning: true,
+					input: ["text", "image"],
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+					contextWindow: 1048576,
+					maxTokens: 131072,
+				},
+			],
+		});
+		const live = indexModelsByRequestId(registry.getAll(), routable);
+		const resolved = resolveGatewayModel(live, routable, museId);
+		expect(resolved).toBe(live.get(museId));
+		expect(resolved?.name).toBe("Muse Spark 1.3 (live)");
+	});
+
+	test("rejects qualified ids for non-routable providers", () => {
+		const live = indexModelsByRequestId([], new Set(["anthropic"]));
+		expect(resolveGatewayModel(live, new Set(["anthropic"]), museId)).toBeUndefined();
+	});
+
+	test("rejects bare, malformed, and unknown ids (no passthrough)", () => {
+		const live = indexModelsByRequestId([], routable);
+		expect(resolveGatewayModel(live, routable, "muse-spark-1.3")).toBeUndefined();
+		expect(resolveGatewayModel(live, routable, "muse-code/")).toBeUndefined();
+		expect(resolveGatewayModel(live, routable, "/muse-spark-1.3")).toBeUndefined();
+		expect(resolveGatewayModel(live, routable, "muse-code/no-such-model")).toBeUndefined();
+		expect(resolveGatewayModel(live, routable, "no-such-provider/muse-spark-1.3")).toBeUndefined();
+		expect(resolveGatewayModel(live, routable, "")).toBeUndefined();
 	});
 });

@@ -8,6 +8,7 @@
 ### Fixed
 
 - Fixed unsupported ACP MCP transports to fail with a defensive transport error instead of falling through an invalid server shape.
+- Fixed the auth gateway returning `Unknown model` for bundled models a lagging provider listing omits: request resolution falls back to explicitly provider-qualified bundled ids on routable providers, while `/v1/models` keeps serving the live authoritative listing.
 
 ## [18.1.15] - 2026-09-08
 

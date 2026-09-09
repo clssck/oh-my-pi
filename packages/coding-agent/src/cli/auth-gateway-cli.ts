@@ -226,6 +226,35 @@ export function indexModelsByRequestId(
 	return modelById;
 }
 
+/**
+ * Resolve a gateway client-requested model id to a routable model.
+ *
+ * The live index wins: discovered entries always take precedence, so this
+ * never overrides discovered metadata. On a miss it falls back ONLY to
+ * explicitly provider-qualified bundled ids (`provider/id`) whose provider is
+ * routable — covering bundled models a lagging provider listing omits
+ * (egress-split or rollout-delayed discovery) without advertising stale rows:
+ * callers keep serving `/v1/models` from the live index alone and this never
+ * mutates the index.
+ *
+ * Bare ids never fall back (first-write-wins bare entries stay authoritative
+ * for legacy clients) and unknown providers/ids stay unknown: there is no
+ * model passthrough.
+ */
+export function resolveGatewayModel(
+	modelById: ReadonlyMap<string, Model<Api>>,
+	routableProviders: ReadonlySet<string>,
+	requestId: string,
+): Model<Api> | undefined {
+	const live = modelById.get(requestId);
+	if (live) return live;
+	const slash = requestId.indexOf("/");
+	if (slash <= 0 || slash === requestId.length - 1) return undefined;
+	const provider = requestId.slice(0, slash);
+	if (!routableProviders.has(provider)) return undefined;
+	return getBundledModels(provider as GeneratedProvider).find(model => model.id === requestId.slice(slash + 1));
+}
+
 async function runServe(flags: AuthGatewayCommandArgs["flags"]): Promise<void> {
 	const brokerConfig = await resolveAuthBrokerConfig();
 	if (!brokerConfig) {
@@ -288,7 +317,7 @@ async function runServe(flags: AuthGatewayCommandArgs["flags"]): Promise<void> {
 		bind,
 		bearerTokens: gatewayToken ? [gatewayToken] : [],
 		version: VERSION,
-		resolveModel: (id: string) => modelById.get(id),
+		resolveModel: (id: string) => resolveGatewayModel(modelById, routableProviders, id),
 		listModels: () => modelById.values(),
 	});
 	process.stdout.write(`auth-gateway listening on ${handle.url}\n`);
