@@ -61,6 +61,7 @@
 		"auth/perplexity.kdl",
 		"auth/qianfan.kdl",
 		"auth/qwen-portal.kdl",
+		"auth/runinfra.kdl",
 		"auth/sakana.kdl",
 		"auth/siliconflow-cn.kdl",
 		"auth/siliconflow.kdl",
@@ -151,6 +152,7 @@
 		"providers/opencode-zen.kdl",
 		"providers/openrouter.kdl",
 		"providers/qianfan.kdl",
+		"providers/runinfra.kdl",
 		"providers/sakana.kdl",
 		"providers/synthetic.kdl",
 		"providers/together.kdl",
@@ -9300,6 +9302,27 @@
 				}
 			},
 			{
+				"source": "providers/kimi-code.kdl:40",
+				"providers": [
+					"kimi-code"
+				],
+				"models": [
+					{
+						"kind": "glob",
+						"value": "k3*"
+					}
+				],
+				"thinking": {
+					"defaultLevel": "max",
+					"efforts": [
+						"low",
+						"high",
+						"max"
+					],
+					"requiresEffort": true
+				}
+			},
+			{
 				"source": "providers/kimi-code.kdl:3",
 				"providers": [
 					"kimi-code"
@@ -12229,6 +12252,25 @@
 				],
 				"thinking": {
 					"mode": "effort"
+				}
+			},
+			{
+				"source": "providers/runinfra.kdl:6",
+				"providers": [
+					"runinfra"
+				],
+				"models": [
+					{
+						"kind": "exact",
+						"value": "qwen3-8-27b"
+					}
+				],
+				"thinking": {
+					"defaultLevel": "high",
+					"efforts": [
+						"low",
+						"high"
+					]
 				}
 			},
 			{
@@ -15825,6 +15867,22 @@
 				"pasteCode": true
 			},
 			{
+				"id": "google-vertex",
+				"apiKeyFormat": "structured",
+				"name": "Google Vertex AI",
+				"env": {
+					"hook": "google-vertex-adc"
+				},
+				"login": {
+					"kind": "custom",
+					"hook": "google-vertex"
+				},
+				"refresh": {
+					"kind": "hook",
+					"hook": "google-vertex"
+				}
+			},
+			{
 				"id": "openai-codex-device",
 				"apiKeyFormat": "bearer",
 				"name": "ChatGPT Plus/Pro (Codex, headless/device)",
@@ -17100,6 +17158,23 @@
 				}
 			},
 			{
+				"id": "runinfra",
+				"apiKeyFormat": "bearer",
+				"name": "RunInfra",
+				"login": {
+					"kind": "api-key",
+					"authUrl": "https://runinfra.ai",
+					"instructions": "Create or copy your RunInfra API key",
+					"prompt": "Paste your RunInfra API key",
+					"placeholder": "RunInfra API key",
+					"validate": {
+						"kind": "models-endpoint",
+						"label": "runinfra",
+						"url": "https://api.runinfra.ai/v1/models"
+					}
+				}
+			},
+			{
 				"id": "aimlapi",
 				"apiKeyFormat": "bearer",
 				"name": "AIML API"
@@ -17130,14 +17205,6 @@
 				"id": "google",
 				"apiKeyFormat": "bearer",
 				"name": "Google Gemini"
-			},
-			{
-				"id": "google-vertex",
-				"apiKeyFormat": "bearer",
-				"name": "Google Vertex AI",
-				"env": {
-					"hook": "google-vertex-adc"
-				}
 			},
 			{
 				"id": "groq",
