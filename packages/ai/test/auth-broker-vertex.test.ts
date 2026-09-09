@@ -11,7 +11,7 @@ import {
 	startAuthBroker,
 } from "@oh-my-pi/pi-ai/auth-broker";
 import { removeWithRetries } from "../../utils/src/temp";
-import { refreshGoogleVertexToken } from "../src/registry/google-vertex";
+import { refreshGoogleVertexToken } from "../src/registry/oauth/google-vertex";
 
 async function generateServiceAccountPem(): Promise<string> {
 	const keyPair = (await globalThis.crypto.subtle.generateKey(

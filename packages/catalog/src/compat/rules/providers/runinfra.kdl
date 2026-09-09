@@ -1,0 +1,10 @@
+// Provider-wire compat for "runinfra".
+
+provider "runinfra" {
+	// residue: reviewed provider-authored ladder for the Qwen3.8 27B row;
+	// taxonomy ranks do not isolate its pinned effort scale.
+	models "qwen3-8-27b" {
+		thinking-default-level "high"
+		thinking-efforts "low" "high"
+	}
+}

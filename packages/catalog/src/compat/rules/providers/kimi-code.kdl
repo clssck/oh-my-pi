@@ -34,4 +34,12 @@ provider "kimi-code" {
 		thinking-efforts "minimal" "low" "medium" "high"
 		thinking-format "zai"
 	}
+	// residue: bare kimi-code K3 dialect ids (`k3`, `k3-256k`, discovered
+	// `k3-*` aliases) carry no family token, so taxonomy ranks cannot
+	// classify them; production pins the K3 ladder here as reviewed truth.
+	models "k3*" {
+		thinking-default-level "max"
+		thinking-efforts "low" "high" "max"
+		thinking-requires-effort #true
+	}
 }

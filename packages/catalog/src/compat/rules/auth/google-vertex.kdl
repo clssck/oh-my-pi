@@ -2,5 +2,7 @@ auth "google-vertex" {
 	name "Google Vertex AI"
 	// Vertex AI supports either GOOGLE_CLOUD_API_KEY or Application Default Credentials.
 	env hook="google-vertex-adc"
+	login "custom" hook="google-vertex"
+	refresh hook="google-vertex"
 	api-key-format "structured"
 }

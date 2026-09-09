@@ -1,0 +1,9 @@
+auth "runinfra" {
+	name "RunInfra"
+	login "api-key" {
+		auth-url "https://runinfra.ai"
+		instructions "Create or copy your RunInfra API key"
+		prompt "Paste your RunInfra API key" placeholder="RunInfra API key"
+		validate "models-endpoint" label="runinfra" url="https://api.runinfra.ai/v1/models"
+	}
+}
