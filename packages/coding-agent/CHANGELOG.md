@@ -57,6 +57,7 @@
 - Fixed cancelling a bash job hard-killing it before its TERM cleanup handlers could run; it now gets up to one second to clean up before termination is forced ([#15709](https://github.com/can1357/oh-my-pi/pull/15709) by [@mg-mg-mg](https://github.com/mg-mg-mg))
 - Fixed the transcript collapsing to one line per entry after switching between a subagent and the main session mid-turn when an earlier turn left a tool call without a result ([#12247](https://github.com/can1357/oh-my-pi/issues/12247), [#15466](https://github.com/can1357/oh-my-pi/pull/15466) by [@shgew](https://github.com/shgew))
 - Fixed a retried tool losing its transcript card when the view was rebuilt (subagent focus switch, overlay close) while the tool was still running
+- Fixed the headless browser exposing its Linux host next to its Windows user agent, which bot detectors flag: `navigator.platform` in pages and every worker kind (dedicated, module, nested, shared, service), the user agent and UA-CH in shared and service workers, the arm UA-CH architecture, and a `10.0` UA-CH platform version; the page mismatch also reappeared in existing tabs whenever another tab opened
 
 ## [18.11.1] - 2026-10-15
 
