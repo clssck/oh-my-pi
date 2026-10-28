@@ -4,7 +4,7 @@ import * as path from "node:path";
 import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import { Shell } from "@oh-my-pi/pi-natives";
 import type { ReadToolDetails } from "@oh-my-pi/pi-tui/tools/read";
-import { DEFAULT_MAX_LINES, truncateHead, truncateTail } from "@oh-my-pi/pi-tui/tools/streaming-output";
+import { DEFAULT_MAX_LINES, truncateHead, truncateMiddle, truncateTail } from "@oh-my-pi/pi-tui/tools/streaming-output";
 import { ToolError } from "@oh-my-pi/pi-tui/tools/tool-errors";
 import {
 	IMAGE_METADATA_HEADER_BYTES,
@@ -56,6 +56,12 @@ const JSON_QUERY_TIMEOUT_MS = 30_000;
 const PAGE_FULL_ABORT_DELAY_MS = 50;
 /** Bounds the jq stderr quoted in a result; the tail keeps the error after any `debug` lines. */
 const JSON_QUERY_ERROR_MAX_BYTES = 8 * 1024;
+/**
+ * Bounds one jq stderr line. jaq quotes the whole offending value inside its
+ * error (`cannot index <value> with "key"`), so a large input would otherwise
+ * fill the error budget with data and cut the reason off the front.
+ */
+const JSON_QUERY_ERROR_LINE_MAX_BYTES = 512;
 /** jaq's default pretty-print indent. */
 const PRETTY_INDENT = "  ";
 
@@ -251,6 +257,17 @@ async function readStderr(stderrPath: string): Promise<string> {
 }
 
 /**
+ * Elides the middle of each overlong stderr line, keeping the reason at its start and the key at its end.
+ * Two one-line windows make `truncateMiddle` split a single line into a byte head and a byte tail.
+ */
+function shortenJqErrorLines(stderr: string): string {
+	return stderr
+		.split("\n")
+		.map(line => truncateMiddle(line, { maxBytes: JSON_QUERY_ERROR_LINE_MAX_BYTES, maxLines: 2 }).content)
+		.join("\n");
+}
+
+/**
  * Runs the bundled jaq over `filePath` and captures stdout; stderr goes to a
  * temp file so diagnostics never mix into result values. Capture stops at
  * {@link MAX_QUERY_CAPTURE_CHARS} or after `stopAfterLines` newlines.
@@ -309,7 +326,7 @@ async function runJq(
 		if (result.timedOut && !stopped) {
 			throw new ToolError(`JSON query timed out after ${JSON_QUERY_TIMEOUT_MS / 1000} seconds`);
 		}
-		const stderr = truncateTail(sanitizeText(await readStderr(stderrPath)).trim(), {
+		const stderr = truncateTail(shortenJqErrorLines(sanitizeText(await readStderr(stderrPath)).trim()), {
 			maxBytes: JSON_QUERY_ERROR_MAX_BYTES,
 		}).content;
 		if (!stopped && (result.exitCode !== 0 || callbackError)) {

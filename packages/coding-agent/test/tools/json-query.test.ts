@@ -128,6 +128,23 @@ describe("JSON query in read tool", () => {
 		);
 	});
 
+	it("keeps the reason and the key when jaq quotes a large value in its error", async () => {
+		const bigFile = path.join(tempDir, "big-array.json");
+		const rows = Array.from({ length: 400 }, (_, i) => ({ label: `row ${i}`, input: "x".repeat(40) }));
+		await fs.writeFile(bigFile, JSON.stringify([{ rows }]), "utf-8");
+
+		const error = await readTool.execute("call_big", { path: `${bigFile}?q=.changedFiles` }).then(
+			() => undefined,
+			(err: unknown) => err,
+		);
+
+		expect(error).toBeInstanceOf(Error);
+		const message = (error as Error).message;
+		expect(message).toMatch(/Failed to execute JSON query: .*cannot index/is);
+		expect(message).toContain('"changedFiles"');
+		expect(message.length).toBeLessThan(1024);
+	});
+
 	it("reads the file normally without jq query when ?q= is omitted", async () => {
 		const result = await readTool.execute("call_7", { path: jsonFile });
 		const text = getText(result);

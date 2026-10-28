@@ -9,6 +9,7 @@
 ### Fixed
 
 - `todo` `append` without a `phase` now adds the items to the active phase (or the last phase, or a new "Tasks" phase when there are none) instead of failing with "Missing phase name"
+- A failed `read …?q=` JSON query on a large value now reports a short error that keeps jaq's reason and the key, instead of up to 8 KB of quoted data with the reason cut off
 
 ## [18.13.2] - 2026-10-27
 
