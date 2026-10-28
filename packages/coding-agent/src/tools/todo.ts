@@ -342,11 +342,23 @@ function initPhases(entry: TodoOpEntryValue, errors: string[]): TodoPhase[] {
 	}));
 }
 
+function addPhase(phases: TodoPhase[], name: string): TodoPhase {
+	const phase: TodoPhase = { name, tasks: [] };
+	phases.push(phase);
+	return phase;
+}
+
+/**
+ * Phase a phaseless `append` extends: the one holding the active task, else the
+ * last phase, else a new {@link DEFAULT_INIT_PHASE}, mirroring flat `init`.
+ */
+function defaultAppendPhase(phases: TodoPhase[]): TodoPhase {
+	const active = nextActionableTask(phases);
+	const phase = (active && phases.find(candidate => candidate.tasks.includes(active))) ?? phases.at(-1);
+	return phase ?? addPhase(phases, DEFAULT_INIT_PHASE);
+}
+
 function appendItems(phases: TodoPhase[], entry: TodoOpEntryValue, errors: string[]): TodoPhase[] {
-	if (!entry.phase) {
-		errors.push("Missing phase name for append operation");
-		return phases;
-	}
 	if (!entry.items || entry.items.length === 0) {
 		errors.push("Missing items for append operation");
 		return phases;
@@ -365,11 +377,9 @@ function appendItems(phases: TodoPhase[], entry: TodoOpEntryValue, errors: strin
 	}
 	if (hasDuplicate) return phases;
 
-	let phase = findPhaseByName(phases, entry.phase);
-	if (!phase) {
-		phase = { name: entry.phase, tasks: [] };
-		phases.push(phase);
-	}
+	const phase = entry.phase
+		? (findPhaseByName(phases, entry.phase) ?? addPhase(phases, entry.phase))
+		: defaultAppendPhase(phases);
 
 	for (const content of entry.items) {
 		phase.tasks.push({ content, status: "pending" });

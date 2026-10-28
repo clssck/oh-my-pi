@@ -200,6 +200,40 @@ describe("TodoTool operations", () => {
 		]);
 	});
 
+	it("appends phaseless items to the active phase, or the last phase once all are done", async () => {
+		const tool = new TodoTool(createSession());
+		await tool.execute("call-1", {
+			op: "init",
+			list: [
+				{ phase: "A", items: ["a1"] },
+				{ phase: "B", items: ["b1"] },
+			],
+		});
+
+		const active = await tool.execute("call-2", { op: "append", items: ["a2"] });
+		expect(active.isError).not.toBe(true);
+		expect(active.details?.phases.map(phase => phase.tasks.map(task => task.content))).toEqual([
+			["a1", "a2"],
+			["b1"],
+		]);
+
+		await tool.execute("call-3", { op: "done", phase: "A" });
+		await tool.execute("call-4", { op: "done", phase: "B" });
+		const finished = await tool.execute("call-5", { op: "append", items: ["follow-up"] });
+		expect(finished.details?.phases.map(phase => phase.tasks.map(task => task.content))).toEqual([
+			["a1", "a2"],
+			["b1", "follow-up"],
+		]);
+	});
+
+	it("starts a Tasks phase for a phaseless append with no todos", async () => {
+		const tool = new TodoTool(createSession());
+
+		const result = await tool.execute("call-1", { op: "append", items: ["first"] });
+
+		expect(result.details?.phases).toEqual([{ name: "Tasks", tasks: [{ content: "first", status: "in_progress" }] }]);
+	});
+
 	it("blocks a task (excluded from remaining, counted distinctly) and unblocks it", async () => {
 		const tool = new TodoTool(createSession());
 		await tool.execute("call-1", { op: "init", list: [{ phase: "Work", items: ["a", "b"] }] });

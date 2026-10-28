@@ -6,6 +6,10 @@
 
 - Updated Bun engine requirement to ≥1.4.4
 
+### Fixed
+
+- `todo` `append` without a `phase` now adds the items to the active phase (or the last phase, or a new "Tasks" phase when there are none) instead of failing with "Missing phase name"
+
 ## [18.13.2] - 2026-10-27
 
 ### Added
