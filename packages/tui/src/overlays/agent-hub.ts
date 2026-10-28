@@ -89,7 +89,7 @@ import { SplitPane } from "../components/layout/split-pane";
 import { Stack } from "../components/layout/stack";
 import { node, span, stableKey, text } from "../native/describe";
 import { type DescribeContext, leafKey, type NativeChild, type NativeNode, type NativeUiEvent } from "../native/node";
-import { hintsRow, type NativeHint, overlayCard } from "../native/overlay";
+import { hintsRow, NARROW_SHEET_COLS, type NativeHint, overlayCard } from "../native/overlay";
 import { CLOSE_ACTION, picker, pickerQuery } from "../native/picker";
 import { Input } from "../components/input";
 
@@ -712,11 +712,12 @@ export class AgentHubOverlayComponent<TRecord extends AgentRecordLike = AgentRec
 		const usePicker = cx.supports("picker");
 		const nativeTree = cx.supports("tree");
 		const meter = cx.supports("meter");
-		const variant = usePicker ? `picker:${meter}` : nativeTree ? "tree" : "list";
+		const narrow = cx.cols < NARROW_SHEET_COLS;
+		const variant = usePicker ? `picker:${meter}:${narrow}` : nativeTree ? "tree" : "list";
 		if (this.#native && this.#nativeVariant === variant) return this.#native;
 		this.#nativeVariant = variant;
 		if (usePicker) {
-			this.#native = this.#describePicker(meter);
+			this.#native = this.#describePicker(meter, narrow);
 			return this.#native;
 		}
 		const tabs = node("tabs", { items: SECTION_TABS, active: this.#section }, undefined, "section");
@@ -867,9 +868,14 @@ export class AgentHubOverlayComponent<TRecord extends AgentRecordLike = AgentRec
 		}
 	}
 
-	/** The hub as a data-first `picker` (§9.1): roster or activity log, selected agent as preview. */
-	#describePicker(meter: boolean): NativeNode {
+	/**
+	 * The hub as a data-first `picker` (§9.1): roster or activity log, selected agent as preview.
+	 * A narrow pane (a phone) has one row for the action bar: the primary action takes its short
+	 * label and disabled actions drop out, so Close is not pushed off its end.
+	 */
+	#describePicker(meter: boolean, narrow: boolean): NativeNode {
 		const activity = this.#section === "activity";
+		const body = activity ? this.#activityPickerProps(narrow) : this.#agentPickerProps(narrow);
 		const props: TspPickerProps = {
 			title: "Agents",
 			subtitle: this.#pickerSubtitle(),
@@ -877,7 +883,8 @@ export class AgentHubOverlayComponent<TRecord extends AgentRecordLike = AgentRec
 			size: "lg",
 			tabs: PICKER_TABS,
 			tab: this.#section,
-			...(activity ? this.#activityPickerProps() : this.#agentPickerProps()),
+			...body,
+			actions: narrow ? body.actions?.filter(action => action.disabled === undefined) : body.actions,
 		};
 		const preview = activity ? [] : this.#describePreview(this.#rows[this.#selectedRow], meter);
 		return picker(props, preview);
@@ -893,13 +900,13 @@ export class AgentHubOverlayComponent<TRecord extends AgentRecordLike = AgentRec
 		return parts.join(theme.sep.dot);
 	}
 
-	#agentPickerProps(): PickerBody {
+	#agentPickerProps(narrow: boolean): PickerBody {
 		const selected = this.#rows[this.#selectedRow];
 		const readOnly = selected?.kind === "advisor" ? "Read-only advisor transcript" : undefined;
 		const actions: TspPickerAction[] = [
 			{
 				id: "open",
-				label: "Open transcript",
+				label: narrow ? "Open" : "Open transcript",
 				keys: ["enter"],
 				primary: true,
 				disabled: selected ? undefined : true,
@@ -1077,7 +1084,7 @@ export class AgentHubOverlayComponent<TRecord extends AgentRecordLike = AgentRec
 		return out;
 	}
 
-	#activityPickerProps(): PickerBody {
+	#activityPickerProps(narrow: boolean): PickerBody {
 		const agent = this.#rows[this.#selectedRow]?.id;
 		const scope =
 			this.#activityScope === "all"
@@ -1101,7 +1108,7 @@ export class AgentHubOverlayComponent<TRecord extends AgentRecordLike = AgentRec
 			actions: [
 				{
 					id: "open",
-					label: "Open transcript",
+					label: narrow ? "Open" : "Open transcript",
 					keys: ["enter"],
 					primary: true,
 					disabled: selected ? undefined : true,

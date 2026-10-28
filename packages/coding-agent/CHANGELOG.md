@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The agents hub in Tern on a phone-width pane (e.g. Tern on iOS) now shows its Close button; the action bar shortens "Open transcript" to "Open" and leaves out unavailable actions so Close is no longer pushed off the row
+
 ## [18.13.3] - 2026-10-28
 
 ### Added

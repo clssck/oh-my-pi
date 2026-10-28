@@ -150,6 +150,46 @@ test("the By parent action and the t key both switch the picker to the parent tr
 	}
 });
 
+test("on a phone-width pane the action bar drops disabled actions and keeps Close, which still closes", () => {
+	let closed = 0;
+	const hub = new AgentHubOverlayComponent({
+		observers: new SessionObserverRegistry(),
+		transcript: { fs, parseEntries: () => [] },
+		loadPersisted: async () => {},
+		hubKeys: [],
+		onDone: () => {
+			closed++;
+		},
+		requestRender: () => {},
+		registry: {
+			list: () => [agent("alpha", 1_000, { status: "running" })],
+			get: id => (id === "alpha" ? agent("alpha", 1_000, { status: "running" }) : undefined),
+			onChange: () => () => {},
+		},
+		lifecycle: () => {
+			throw new Error("lifecycle is not used by close");
+		},
+		irc: { unreadCount: () => 0 },
+		activity: { setLive() {}, sync: async () => {}, query: () => [], recent: () => [] },
+		focusAgent: async () => {},
+	});
+	try {
+		const ids = (cols: number): (string | undefined)[] => {
+			const root = hub.describe({ ...pickerCx, cols });
+			if (root.k !== "picker") throw new Error(`expected a picker root, got ${root.k}`);
+			return root.p?.actions?.map(action => (action.primary ? `${action.id}:${action.label}` : action.id)) ?? [];
+		};
+		// Revive is disabled for a running agent: wide panes show it greyed, a phone drops it.
+		expect(ids(120)).toEqual(["open:Open transcript", "revive", "kill", "view", "filter", "close"]);
+		expect(ids(48)).toEqual(["open:Open", "kill", "view", "filter", "close"]);
+
+		hub.handleNativeEvent({ type: "action", key: "", act: "close", mods: [] });
+		expect(closed).toBe(1);
+	} finally {
+		hub.dispose();
+	}
+});
+
 /** An observer registry fed by a fake bus, with one running `Worker` progress frame of `durationMs` at t=1_000_000. */
 function observedWorker(durationMs: number) {
 	const listeners = new Map<string, (data: unknown) => void>();
